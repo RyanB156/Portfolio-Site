@@ -1,0 +1,115 @@
+:host {
+    display: inline;
+    left: auto;
+}
+
+* {
+    color: black;
+}
+
+.wrapper {
+    display: flex;
+    width: 100%;
+}
+
+#sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 250px;
+    background: #d6d6d6;
+    color: black;
+}
+
+#sidebar .sidebar-header {
+    padding: 20px;
+    background: #d6d6d6;
+}
+
+#sidebar ul.components {
+    padding: 20px 0;
+    border-bottom: 1px solid #47748b;
+}
+
+#sidebar ul p {
+    color: black;
+    padding: 10px;
+}
+
+#sidebar ul li a {
+    padding: 10px;
+    font-size: 1.1em;
+    display: block;
+}
+
+#sidebar ul li a:hover {
+    color: #7386d5;
+    background: #fff;
+}
+
+.li-item {
+    margin-left: 5px;
+}
+
+button.active {
+    color: rgb(14, 101, 107);
+}
+
+ul a {
+    font-size: 0.9em !important;
+    padding-left: 30px !important;
+    background: #d6d6d6;
+}
+
+#sidebar.active {
+    margin-left: -250px;
+}
+
+#sidebarCollapse {
+    margin-left: 250px;
+    transition: all 0.3s;
+    z-index: -1;
+}
+
+#sidebarCollapse.active {
+    margin-left: 0px;
+}
+
+a[data-toggle="collapse"] {
+    position: relative;
+}
+
+.dropdown-toggle::after {
+    display: block;
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+}
+
+@media (max-width: 768px) {
+    #sidebar {
+        margin-left: -250px;
+    }
+    #sidebar.active {
+        margin-left: 0;
+    }
+}
+
+p {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 1.1em;
+    font-weight: 300;
+    line-height: 1.7em;
+    color: #999;
+}
+
+a, a:hover, a:focus {
+    color: inherit;
+    text-decoration: none;
+    transition: all 0.3s;
+}
+
+
+
