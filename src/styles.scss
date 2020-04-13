@@ -1,6 +1,32 @@
 /* You can add global styles to this file, and also import other style files */
 @import '~bootstrap/dist/css/bootstrap.css';
 
-.bg-light {
-  background-color: rgb(245, 245, 245);
+.bg1 {
+  background-color: rgb(214, 214, 214);
 }
+
+.bg2 {
+  background-color: rgb(236, 236, 236);
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+.section {
+  margin: 30px;
+  padding: 20px 25px;
+  margin-top: 0;
+}
+
+:host {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-size: 14px;
+  color: #333;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+div.img-group .img-box {
+  padding: 0;
+}
+
