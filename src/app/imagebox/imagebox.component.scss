@@ -1,0 +1,28 @@
+
+// Entire imagebox.
+.img-box {
+  padding: 10px;
+}
+
+// Top of the imagebox with the image inside.
+.img-box-head {
+  font-size: 1em;
+}
+
+// Image inside of the imagebox.
+.img-box-img {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  border: solid 1px black;
+}
+
+// Caption for the imagebox.
+.img-box-caption {
+  padding: 5px 5px 5px 5px;
+}
+
+div.img-group .img-box {
+  padding: 0;
+  margin: 0;
+}
