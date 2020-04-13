@@ -37,15 +37,6 @@ p {
   align-items: center;
 }
 
-svg.material-icons {
-  height: 24px;
-  width: auto;
-}
-
-svg.material-icons:not(:last-child) {
-  margin-right: 8px;
-}
-
 a,
 a:visited,
 a:hover {
@@ -74,25 +65,11 @@ li a {
   padding-right: 0;
 }
 
-/* Responsive Styles */
-@media screen and (max-width: 767px) {
+.navbar {
+  margin-bottom: 15px;
+  border-bottom: solid 2px black;
+}
 
-  .card-container > *:not(.circle-link) ,
-  .terminal {
-    width: 100%;
-  }
-
-  .card:not(.highlight-card) {
-    height: 16px;
-    margin: 8px 0;
-  }
-
-  .card.highlight-card span {
-    margin-left: 72px;
-  }
-
-  svg#rocket-smoke {
-    right: 120px;
-    transform: rotate(-5deg);
-  }
+.body {
+  padding: 10px 50px 10px 50px;
 }
