@@ -1,6 +1,7 @@
 div img {
-    max-width: 275px;
-    max-height: 275px;
+  max-height: 250px;
+  margin-top: 10px;
+  padding-right: 15px;
 }
 
 div h5 {
@@ -27,19 +28,4 @@ dl li {
 
 dt {
   font-weight: 0.9;
-}
-
-.highlights {
-  padding-top: 30px;
-  padding-right: 30px;
-}
-
-.container {
-  padding-left: 30px;
-  padding-right: 30px;
-}
-
-.section {
-  margin: 20px;
-  padding: 15px;
 }
