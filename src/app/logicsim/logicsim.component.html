@@ -1,1 +1,78 @@
-<p>logicsim works!</p>
+<div class="bg2 section">
+  <h2>Logic Gate Simulator</h2>
+  <h4>Check out the simulator at <a href="https://github.com/RyanB156/LogicGateSimulator">https://github.com/RyanB156/LogicGateSimulator</a>
+    and the editor at <a href="https://github.com/RyanB156/LogicGateIDE">https://github.com/RyanB156/LogicGateIDE!</a></h4>
+
+  <p>I started this project because I absolutely love studying language and I wanted to make my own. There are so many general purpose programming languages out there, so I decided to make a Domain Specific Language (DML) to simulate logic circuits.</p>
+  <h5>Notable Features</h5>
+  <ul>
+    <li>Parser written in F# with the FParsec Parser Combinator library</li>
+    <li>Support for the canonical logic gates; some higher level circuits like decoders, multiplexers, and flipflops; and custom gates</li>
+  </ul>
+
+  
+  <h5>My Programming Language</h5>
+  <h6>Abstract Syntax Tree</h6>
+  <pre>
+    type Identifier = string
+    type FilePath = string
+    type InputNode = int
+    type OutputNode = int
+    type InputCount = int
+
+    type NodeChoice = | NodeNumber of int | NodeName of string
+
+    type Inputs = Identifier list
+    type Outputs = Identifier list
+
+    type Expr =
+        | Value of bool
+        | Variable of Identifier
+        | PostFixOp of Expr * string
+        | InfixOp of Expr * string * Expr
+
+    type OutputFunction = Identifier * Expr
+
+    type GateType =
+        | UnaryGate of Gate * Identifier * Outputs
+        | NaryGate of Gate * Identifier * InputCount * Inputs * Outputs
+        | Custom of Identifier * Inputs * Outputs * OutputFunction list
+
+    type Statement = 
+        | Comment
+        | Load of FilePath
+        | Define of GateType
+        | Instantiate of Identifier * Identifier // MyGate (gate1)
+        | ConnectList of Identifier * NodeChoice option * (Identifier * NodeChoice) list
+  </pre>
+
+  <p>F#'s type aliasing and discriminated union type made creating the AST for the language very easy and human readable.</p>
+  <p>With the FParsec, it was very easy to build a powerful and robust parser for the language by combining smaller parsers together. The expression parser, for example, combines parsers for boolean literals, identifiers, and operator expressions and combines them with a choice parser. Once the language is parsed, F# is used to instantiate the C# classes for all of the circuits in the program and connects them together. Then it sends the complete circuit to the C# part of the project so the results can be displayed using Windows Forms.</p>
+
+  <imagebox src="../../assets/images/logicgate/decoderadderprogram.JPG" maxWidth=500px>
+    <p>An example program that uses a decoder circuit to create a full adder. Displayed in the LogicGateIDE.</p>
+  </imagebox>
+
+  <imagebox src="../../assets/images/logicgate/decoderfunction.JPG" maxWidth=500px>
+    <p>An example of the custom logic gates that can be created. This creates a decoder that performs the exact same function as the inbuilt decoder.</p>
+  </imagebox>
+
+  <div class="img-group row">
+    <div class="col">
+      <imagebox src="../../assets/images/logicgate/decoderadder0.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder1.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder2.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder3.JPG" maxWidth=500px></imagebox>
+    </div>
+    <div class="col">
+      <imagebox src="../../assets/images/logicgate/decoderadder4.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder5.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder6.JPG" maxWidth=500px></imagebox>
+      <imagebox src="../../assets/images/logicgate/decoderadder7.JPG" maxWidth=500px></imagebox>
+    </div>
+  </div>
+  <div class="text-center">
+    <p>Output of the the example program with different inputs set to true or false.</p>
+  </div>
+
+</div>
