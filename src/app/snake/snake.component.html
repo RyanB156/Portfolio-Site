@@ -3,13 +3,35 @@
       <div class="col-8">
         <canvas id='canvas'>This is a canvas</canvas>
       </div>
-      <div class="col-md-2"></div>
       <div class="col-2 header">
         <div class="h3">Controls</div>
         <p>WASD or arrow keys to move</p>
         <span>Length: {{this.body.length}}</span>
         <p class="end-msg" *ngIf="!this.running">Game Over</p>
     </div>
+  </div>
+
+  <div class="controller">    
+    <table>
+      <tr class="btn-group">
+        <button class="filler" disabled><i class="material-icons">expand_less</i></button>
+        <button (click)="up()">
+          <i class="material-icons">expand_less</i>
+        </button>
+        <th></th>
+      </tr>
+      <tr class="btn-group">
+        <button (click)="left()">
+          <i class="material-icons">chevron_left</i>
+        </button>
+        <button (click)="down()">
+          <i class="material-icons">expand_more</i>
+        </button>
+        <button (click)="right()">
+          <i class="material-icons">chevron_right</i>
+        </button>
+      </tr>
+    </table>
   </div>
     
   <accordion>

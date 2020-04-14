@@ -5,6 +5,17 @@ canvas {
     overflow: hidden;
 }
 
+@media only screen and (max-width: 600px) {
+  .canvas {
+    width: 80%;
+    height: 80%;
+  }
+
+  .up-button {
+    margin-left: 58%;
+  }
+}
+
 .end-msg {
     font-size: 2em;
     color: red;
@@ -12,4 +23,17 @@ canvas {
 
 .header {
     padding: 2px;
+}
+
+.filler {
+  border: none;
+  color: white;
+  background: none;
+  margin-right: 4px;
+}
+
+.controller {
+  padding: 0px;
+  margin: 0px;
+  width: 20%;
 }

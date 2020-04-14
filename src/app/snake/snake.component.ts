@@ -21,8 +21,8 @@ export class SnakeComponent implements OnInit, AfterViewInit {
   running: boolean;
   apple: OrderedPair;
 
-  body: OrderedPair[];
-  dir: Direction;
+  body: OrderedPair[]; // Store the body of the snake as an array of ordered pairs.
+  dir: Direction; // The direction the head will travel in.
 
   time: number;
   updateRate: number;
@@ -34,11 +34,10 @@ export class SnakeComponent implements OnInit, AfterViewInit {
 
     this.dir = new Direction();
 
+    // Create the body with 2 segments.
     this.body = new Array();
     this.body.unshift(new OrderedPair(1, 1));
     this.body.unshift(new OrderedPair(2, 1));
-
-    this.document.title = "Length: " + this.body.length;
   }
 
   ngOnInit(): void {
@@ -53,6 +52,7 @@ export class SnakeComponent implements OnInit, AfterViewInit {
     this.size = 50;
     this.halfsize = this.size / 2;
 
+    // Set the size of the window.
     window.onresize = this.resize;
     this.resize();
 
@@ -63,10 +63,12 @@ export class SnakeComponent implements OnInit, AfterViewInit {
 
     this.apple = this.spawnApple();
 
+    // Set window to update the game on loop.
     window.requestAnimationFrame(this.loop);
     window.addEventListener('keyup', (event) => this.dir.onKeyup(event), false);
   }
 
+  // Set size of the canvas and boxes based on the size of the window.
   resize() {
     this.width = window.innerWidth * 2;
     this.height = window.innerHeight * 2;
@@ -76,12 +78,13 @@ export class SnakeComponent implements OnInit, AfterViewInit {
     this.boxHeight = this.canvas.height / this.size;
   }
 
+  // Generate a new apple to add to the game.
   spawnApple() {
     var pair = new OrderedPair(Math.floor(Math.random() * this.boxWidth), Math.floor(Math.random() * this.boxHeight));
     return pair;
   }
 
-
+  // Make the snake wrap around the screen.
   wrap(low, high, value) {
     if (value < low)
       return high - (low - value);
@@ -90,10 +93,11 @@ export class SnakeComponent implements OnInit, AfterViewInit {
     else return value;
   }
 
+  // Update loop.
   update = (progress) => {
     var ate = false;
 
-    // Update code here
+    // Move the snake.
     if (this.dir.up) {
       this.body.unshift(new OrderedPair(this.body[0].x, this.body[0].y - 1));
     } else if (this.dir.right) {
@@ -106,32 +110,41 @@ export class SnakeComponent implements OnInit, AfterViewInit {
       throw new Error('Invalid Direction');
     }
 
+    // Wrap the snake around the screen.
     this.body[0].x = this.wrap(0, this.boxWidth, this.body[0].x);
     this.body[0].y = this.wrap(0, this.boxHeight, this.body[0].y);
 
+    // Check for collisions between the head of the snake and its tail.
     this.body.slice(1, this.body.length - 1).forEach((pair) => {
       if (pair.x === this.body[0].x && pair.y === this.body[0].y) {
-        this.document.title = "Game Over: " + length;
         this.running = false;
       }
     });
       
-    /*
-      Getting Game Over state.
-      Is this because of an event listener error where the snake is not moving or something?
-      Is it because I started the body wrong?
-      Is the snake moving wrong because of my code?
-    */
-
+    // Check if the snake ate an apple.
     if (this.body[0].x === this.apple.x && this.body[0].y === this.apple.y) {
       ate = true;
-      this.document.title = "Length: " + this.body.length;
       this.apple = this.spawnApple();
     }
 
     if (!ate)
       this.body.pop();
+  }
 
+  up() {
+    this.dir.tryUp();
+  }
+
+  right() {
+    this.dir.tryRight();
+  }
+
+  down() {
+    this.dir.tryDown();
+  }
+
+  left() {
+    this.dir.tryLeft();
   }
 
   draw() {
@@ -139,10 +152,11 @@ export class SnakeComponent implements OnInit, AfterViewInit {
     
     this.ctx.fillStyle = 'blue';
 
+    // Draw the snake.
     this.body.forEach((pair) => {
       this.ctx.fillRect(pair.x * this.size, pair.y * this.size, this.size, this.size);
     });
-
+    // Draw the apple.
     this.ctx.fillStyle = 'red';
     this.ctx.fillRect(this.apple.x * this.size, this.apple.y * this.size, this.size, this.size);
     
@@ -181,6 +195,7 @@ class OrderedPair {
   }
 }
 
+// Handles the direction of the snake and maps keyboard event codes to directions.
 class Direction {
   up: boolean;
   right: boolean; // Start moving to the right.
@@ -195,17 +210,45 @@ class Direction {
     this.up = false; this.right = false; this.down = false; this.left = false;
   }
 
+  tryUp() {
+    if (!this.down) { 
+      this.reset(); 
+      this.up = true; 
+    }
+  }
+
+  tryRight() {
+    if (!this.left) { 
+      this.reset(); 
+      this.right = true; 
+    }
+  }
+
+  tryDown() {
+    if (!this.up) { 
+      this.reset(); 
+      this.down = true; 
+    }
+  }
+
+  tryLeft() {
+    if (!this.right) { 
+      this.reset(); 
+      this.left = true; 
+    } 
+  }
+
   onKeyup(event) {
     console.log(`Received keycode ${event.keyCode}`);
     switch (event.keyCode) {
       case 65:
-      case 37: if (!this.right) { this.reset(); this.left = true; } break;
+      case 37: this.tryLeft(); break;
       case 87:
-      case 38: if (!this.down) { this.reset(); this.up = true; } break;
+      case 38: this.tryUp(); break;
       case 68:
-      case 39: if (!this.left) { this.reset(); this.right = true; } break;
+      case 39: this.tryRight(); break;
       case 83:
-      case 40: if (!this.up) { this.reset(); this.down = true; } break;
+      case 40: this.tryDown(); break;
     }
   }
   
