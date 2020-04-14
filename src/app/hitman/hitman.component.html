@@ -1,78 +1,113 @@
 <div class="bg2 section">
   <h2>Text Based Hitman</h2>
-  <h4>Check out the simulator at <a href="https://github.com/RyanB156/LogicGateSimulator">https://github.com/RyanB156/LogicGateSimulator</a>
-    and the editor at <a href="https://github.com/RyanB156/LogicGateIDE">https://github.com/RyanB156/LogicGateIDE!</a></h4>
-
-  <p>I started this project because I absolutely love studying language and I wanted to make my own. There are so many general purpose programming languages out there, so I decided to make a Domain Specific Language (DML) to simulate logic circuits.</p>
-  <h5>Notable Features</h5>
-  <ul>
-    <li>Parser written in F# with the FParsec Parser Combinator library</li>
-    <li>Support for the canonical logic gates; some higher level circuits like decoders, multiplexers, and flipflops; and custom gates</li>
-  </ul>
+  <h4>Check out the source on <a href="https://github.com/RyanB156/LogicGateIDE">github!</a></h4>
 
   
-  <h5>My Programming Language</h5>
-  <h6>Abstract Syntax Tree</h6>
-  <pre>
-    type Identifier = string
-    type FilePath = string
-    type InputNode = int
-    type OutputNode = int
-    type InputCount = int
+  <h5>Project Summary</h5>
+  <p>I was inspired to make this project after working with the UNIX command line in my Introduction to Unix course at Poly. I wanted to make some sort of text based program that allowed the user to enter commands with tab autocomplete. I decided to make a game because I love programming games and it seemed like a lot of fun. This project started as a text-based choose your own adventure game, but once I built some rooms and allowed the player to move between them I decided a hitman style game with full procedurally generated levels would be more fun.</p>
+  <p>This project was tons of fun because it combined language processing and game development which are two of my favorite things.</p>
 
-    type NodeChoice = | NodeNumber of int | NodeName of string
-
-    type Inputs = Identifier list
-    type Outputs = Identifier list
-
-    type Expr =
-        | Value of bool
-        | Variable of Identifier
-        | PostFixOp of Expr * string
-        | InfixOp of Expr * string * Expr
-
-    type OutputFunction = Identifier * Expr
-
-    type GateType =
-        | UnaryGate of Gate * Identifier * Outputs
-        | NaryGate of Gate * Identifier * InputCount * Inputs * Outputs
-        | Custom of Identifier * Inputs * Outputs * OutputFunction list
-
-    type Statement = 
-        | Comment
-        | Load of FilePath
-        | Define of GateType
-        | Instantiate of Identifier * Identifier // MyGate (gate1)
-        | ConnectList of Identifier * NodeChoice option * (Identifier * NodeChoice) list
-  </pre>
-
-  <p>F#'s type aliasing and discriminated union type made creating the AST for the language very easy and human readable.</p>
-  <p>With the FParsec, it was very easy to build a powerful and robust parser for the language by combining smaller parsers together. The expression parser, for example, combines parsers for boolean literals, identifiers, and operator expressions and combines them with a choice parser. Once the language is parsed, F# is used to instantiate the C# classes for all of the circuits in the program and connects them together. Then it sends the complete circuit to the C# part of the project so the results can be displayed using Windows Forms.</p>
-
-  <imagebox src="../../assets/images/logicgate/decoderadderprogram.JPG" maxWidth=500px>
-    <p>An example program that uses a decoder circuit to create a full adder. Displayed in the LogicGateIDE.</p>
-  </imagebox>
-
-  <imagebox src="../../assets/images/logicgate/decoderfunction.JPG" maxWidth=500px>
-    <p>An example of the custom logic gates that can be created. This creates a decoder that performs the exact same function as the inbuilt decoder.</p>
-  </imagebox>
-
-  <div class="img-group row">
-    <div class="col">
-      <imagebox src="../../assets/images/logicgate/decoderadder0.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder1.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder2.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder3.JPG" maxWidth=500px></imagebox>
-    </div>
-    <div class="col">
-      <imagebox src="../../assets/images/logicgate/decoderadder4.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder5.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder6.JPG" maxWidth=500px></imagebox>
-      <imagebox src="../../assets/images/logicgate/decoderadder7.JPG" maxWidth=500px></imagebox>
-    </div>
-  </div>
-  <div class="text-center">
-    <p>Output of the the example program with different inputs set to true or false.</p>
+  <h5>Gameplay</h5>
+  <div>
+    <p>Enter commands to scope out the area.</p>
+    <p>Find clues that lead you to your targets and complete your mission.</p>
+    <p>A fully procedurally generated world provides a unique experience every time you play.</p>
   </div>
 
+  <h5>Commands</h5>
+  <p>You can press TAB to autocomplete the commands and their arguments. For example, hitting TAB after typing "pickup kni" will fill in "pickup knife". This makes playing the game much easier. The commandline also supports a history function so you can use the up and down arrows to view and repeat previous commands.</p>
+  <h6>The following commands are supported:</h6>
+
+  <div class="cmd-list indent">
+    <p><strong>amuse</strong> (person) - tell a joke to lift a person's spirits, it may backfire</p>
+    <p><strong>apply</strong> (poisonName) to (itemName) - poison a weapon or consumable item</p>
+    <p><strong>approach</strong> (person) - get in close quarters to a person, giving them a chance to react. Required for melee attacks</p>
+    <p><strong>attack </strong>(person) - attack a person with the equipped weapon</p>
+    <p><strong>capture</strong> (person) - capture a terrified person to get an extra life. Only "Fearful" people can be made terrified.</p>
+    <p><strong>cheerup</strong> (person) - increase a person's happiness</p>
+    <p><strong>chokeout</strong> (person) - render a person unconscious</p>
+    <p><strong>command</strong> (person) (pickup/goto/attack/stop) (target) - command an ai to take an action</p>
+    <p><strong>complement</strong> (person) - give a complement to increase happiness and attraction</p>
+    <p><strong>consume</strong> (item) - eat or drink an item to regain health</p>
+    <p><strong>describe</strong> (area/item/person) (_/itemName/personName) - display the description for (area/item/person)</p>
+    <p><strong>disguise</strong> (person) - disguise yourself as a worker by taking their clothes</p>
+    <p><strong>dishearten</strong> (person) - decrease a person's happiness</p>
+    <p><strong>drop</strong> (item) - drop the specified item</p>
+    <p><strong>escape</strong> (item) - make your escape after completing all of the objectives</p>
+    <p><strong>equip</strong> (item) - make a weapon ready to use</p>
+    <p><strong>followme</strong> (person) - ask a person to follow you. Only works if they trust you</p>
+    <p><strong>give</strong> (item) to (person) - give an item to a person</p>
+    <p><strong>goto</strong> (room) - move to the specified room if possible</p>
+    <p><strong>forcegoto</strong> (room) - force your way into a room. Ignores locked doors but alerts the guards in the next room.</p>
+    <p><strong>help</strong> (command) - display information on the command (arg) or lists commands if (arg) is empty</p>
+    <p><strong>inquire</strong> (personStat/personInfo/items) person</p>
+    <p><strong>inspect</strong> (clue) - reveal information about a clue</p>
+    <p><strong>intimidate</strong> (person) - Intimidate a person to make them afraid of you. Lower there resistance to your influence.</p>
+    <p><strong>leaveme</strong> (person) - Causes a person to stop following you</p>
+    <p><strong>peek</strong> (room) - reveal items and people in an adjacent room</p>
+    <p><strong>pickup</strong> (item) - add item in the area to inventory</p>
+    <p><strong>place</strong> (item) in (item) - place an item into another item if possible</p>
+    <p><strong>punch</strong> (person) - hit a person with your fists</p>
+    <p><strong>quit</strong> () - exit the game</p>
+    <p><strong>romance</strong> (person) - romance a person and generate a new life. Other person must have full attraction.</p>
+    <p><strong>save</strong> () - save the game</p>
+    <p><strong>scout</strong> (room) - investigate a location that the current room overlooks</p>
+    <p><strong>search</strong> (area) - reveal items and people in a room</p>
+    <p><strong>seduce</strong> (person) - increase attraction by a lot. hance to fail based on morality.</p>
+    <p><strong>survey</strong> () - reveal buildings in an area</p>
+    <p><strong>talk</strong> (person) - have a conversation with a person. gives a piece of information and raises their trust.</p>
+    <p><strong>takefrom</strong> (person/container) (item) - take an item from a person</p>
+    <p><strong>unequip</strong> (item) - hide a weapon</p>
+    <p><strong></strong>unlock (door) - unlock a door if you have the right key</p>
+    <p><strong>view</strong> (items/time/stats personName/my stats/my companion/objectives/visited rooms) - display (inventory/time/stats for a person)</p>
+    <p><strong>wait</strong> - Do nothing and allow the ai to take a turn</p>
+  </div>
+  
+  <h5>Guards</h5>
+  <p>Watch out for guards. They will be suscpicious of your actions, especially if one of your targets is nearby. Find a disguise to fool them and be sure to use silent weapons to avoid attracting unwanted attention.</p>
+
+  <h5>Items</h5>
+  <p>You start out with only your trusty silenced pistol and a syringe. To gain the upperhand, search the environment for useful items like food, keys, and more weapons. The more items you collect, the more successful you will be in completing your mission.</p>
+
+  <h5>NPCs</h5>
+  <p>The people around you can be your best friends or your worst enemies. Befriend them and they will give you valuable information and even follow your orders. Slight them and they will attack and alert the guards.</p>
+  <p>If an NPC trusts you enough, you can use them as backup in case you get incapicated during your mission.</p>
+
+  <h5>Gameplay Examples</h5>
+  <div class="img-list">
+    <imagebox src="../../assets/images/hitman/searchspawn.JPG" maxWidth=500px>
+      <p>Search the area to see what items and people are in the current area.</p>
+      <p>Escape items are required to complete the game. Complete the mission objectives and get to the exit!</p>
+      <p>Key items allow you to open doors with the matching type</p>
+      <p>Container items hold other items</p>
+      <p>Consumable items restore health when consumed. When given to NPCs it increases their trust in you. High trust means the NPC will follow your commands and even fight with you if their trust is high enough.</p>
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/searchcontainer.JPG" maxWidth=500px>
+      <p>Search containers in the current area.</p>
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/survey.JPG" maxWidth=500px>
+      Survey the surrounding area.
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/peektarget.JPG" maxWidth=500px>
+      Peek into an adjacent area to see what items and people are there.
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/gotoguard.JPG" maxWidth=500px>
+      <p>Attempt to goto an adjacent area. If there are guards with the "Warning" status level they will attack on sight. The game asks for verification before completing this action if that is the case.</p>
+      <p>Moving to another area with an NPC following you will make them come with you.</p>
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/viewequipweapon.JPG" maxWidth=500px>
+      View items that are in your inventory and equip a weapon.
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/moveandsearch.JPG" maxWidth=500px>
+      Goto an adjacent area and search to see the items and people in that area.
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/attack.JPG" maxWidth=500px>
+      Attack someone with the equipped weapon. The ammo count decreases by one after each shot and will prevent you from attacking if it drops to 0. Any guards in the area will be alerted to you once you attack. Using a loud weapon will alert guards in the adjacent areas.
+    </imagebox>
+    <imagebox src="../../assets/images/hitman/disguise.JPG" maxWidth=500px>
+      <p>Disguise as someone that has a job in the area by taking their clothes.</p>
+      <p>The following jobs are possible for the NPCs: Barkeep, Chef, Groundskeeper, Janitor, Maid, Civilian, Guard, and Target.</p>
+    </imagebox>
+  </div>
+  
 </div>
