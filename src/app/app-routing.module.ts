@@ -9,6 +9,7 @@ import { HitmanComponent } from './hitman/hitman.component';
 import { HazelComponent } from './hazel/hazel.component';
 
 const routes: Routes = [
+  { path: '', redirectTo: '/home', pathMatch: 'full'},
   { path: 'home', component: HomeComponent },
   { path: 'games/snake', component: SnakeComponent },
   { path: 'projects/tribe', component: TribeComponent },
