@@ -1,17 +1,23 @@
-<div class="container">
+<div class="container section">
     <div class="row">
-        <div class="col-8">
-            <canvas id='canvas'>This is a canvas</canvas>
-        </div>
-        <div class="col-2"></div>
-        <div class="col-2 header">
-            <h3>Controls</h3>
-            <p>WASD or arrow keys to move</p>
-            <span>Length: {{this.body.length}}</span>
-            <p class="end-msg" *ngIf="!this.running">Game Over</p>
-        </div>
-        
+      <div class="col-8">
+        <canvas id='canvas'>This is a canvas</canvas>
+      </div>
+      <div class="col-md-2"></div>
+      <div class="col-2 header">
+        <div class="h3">Controls</div>
+        <p>WASD or arrow keys to move</p>
+        <span>Length: {{this.body.length}}</span>
+        <p class="end-msg" *ngIf="!this.running">Game Over</p>
     </div>
+  </div>
     
+  <accordion>
+    <panel title="About">
+      <p>I originally wrote this game in JavaScript, but I ported it to TypeScript to put on this website. It uses the base array type to store a list of ordered pairs for the body of the snake. Every update cycle, the head of the snake grows in the direction of motion and the tail shrinks unless the snake ate an apple.</p>
+      <p>The snake is able to loop around the edges of the screen and will die if it collides with its tail.</p>
+    </panel>
+  </accordion>
+
 </div>
 <!--<link rel='stylesheet' type='text/css' href='style.css'>-->
