@@ -1,6 +1,8 @@
 import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
 import { AppRoutingModule } from './app-routing.module';
+import { FormsModule } from '@angular/forms';
+
 import { AppComponent } from './app.component';
 import { SnakeComponent } from './snake/snake.component';
 import { HomeComponent } from './home/home.component';
@@ -13,6 +15,9 @@ import { PanelComponent } from './panel/panel.component';
 import { AccordionComponent } from './accordion/accordion.component';
 import { FooterComponent } from './footer/footer.component';
 import { ImageboxComponent } from './imagebox/imagebox.component';
+import { ShooterComponent } from './shooter/shooter.component';
+import { CalculatorComponent } from './calculator/calculator.component';
+import { MorseCodeComponent } from './morse-code/morse-code.component';
 
 @NgModule({
   declarations: [
@@ -28,10 +33,14 @@ import { ImageboxComponent } from './imagebox/imagebox.component';
     AccordionComponent,
     FooterComponent,
     ImageboxComponent,
+    ShooterComponent,
+    CalculatorComponent,
+    MorseCodeComponent,
   ],
   imports: [
     BrowserModule,
-    AppRoutingModule
+    AppRoutingModule,
+    FormsModule
   ],
   providers: [],
   bootstrap: [AppComponent]
