@@ -7,15 +7,22 @@ import { TribeComponent } from './tribe/tribe.component';
 import { LogicsimComponent } from './logicsim/logicsim.component';
 import { HitmanComponent } from './hitman/hitman.component';
 import { HazelComponent } from './hazel/hazel.component';
+import { ShooterComponent } from './shooter/shooter.component';
+import { CalculatorComponent } from './calculator/calculator.component';
+import { MorseCodeComponent } from './morse-code/morse-code.component';
 
 const routes: Routes = [
   { path: '', redirectTo: '/home', pathMatch: 'full'},
   { path: 'home', component: HomeComponent },
   { path: 'games/snake', component: SnakeComponent },
+  { path: 'games/shooter', component: ShooterComponent },
+  { path: 'apps/calculator', component: CalculatorComponent },
+  { path: 'apps/morsecode', component: MorseCodeComponent },
   { path: 'projects/tribe', component: TribeComponent },
   { path: 'projects/logicsim', component: LogicsimComponent },
   { path: 'projects/hitman', component: HitmanComponent },
-  { path: 'hazel', component: HazelComponent }
+  { path: 'hazel', component: HazelComponent },
+
 ];
 
 @NgModule({
