@@ -1,0 +1,23 @@
+<!-- align - up and down, justify - left and right -->
+<div class="container section bg2">
+  <div class="row justify-content-between">
+    <div class="col-md-5 col-xs-12">
+      <input [(ngModel)]="english" (keyup.enter)="toMorse()" class="text-input" type="text" id="english" 
+        placeholder="Enter an English sentence">
+    </div>
+    <div class="col-md-2 col-xs-12 convert-buttons text-center">
+      <button (click)="toEnglish()" title="Convert to English">
+        <i class="material-icons">chevron_left</i>
+      </button>
+      <button (click)="toMorse()" title="Convert to Morse Code">
+        <i class="material-icons">chevron_right</i>
+      </button>      
+    </div>
+    <div class="col-md-5 col-xs-12">
+      <input [(ngModel)]="morse" (keyup.enter)="toEnglish()" class="text-input" type="text" id="morse" 
+        placeholder="Enter Morse Code">      
+    </div>
+  </div>  
+</div>
+
+
