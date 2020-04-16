@@ -1,0 +1,67 @@
+* {
+  margin: 0px 0px;
+}
+
+.iconify {
+  font-size: 24;
+}
+
+.title {
+  font-size: 20;
+  margin-bottom: 5px;
+}
+
+.dark {
+  background-color: rgb(32, 32, 32);
+  color: white;
+  border: 1px solid rgb(54, 54, 54);
+}
+
+button {
+  background-color: rgb(22, 22, 22);
+  border: 1px solid rgb(54, 54, 54);
+}
+
+button {
+  margin: 1px 1px 1px 1px;
+  min-width: 51px;
+  min-height: 35px;
+  //width: 23.5%;
+  color: white;
+}
+
+button:hover {
+  background-color: rgb(65, 65, 65);
+}
+
+.dark-btn {
+  background-color: rgb(0, 0, 0);
+}
+
+.blue-btn {
+  background-color: rgb(35, 63, 100);
+}
+
+.base {
+  color: white;
+  width: 30%;
+  height: 50%;
+}
+
+input[type=text] {
+  text-align: right;
+  padding: 2px 5px;
+  font-size: 2em;
+  width: 98.5%;
+  background-color: rgb(30, 30, 30);
+  color: white;
+  margin-right: 1px;
+  margin-left: 1px;
+  min-height: 35px;
+  border: 1px solid rgb(65, 65, 65);
+}
+
+.container {
+  padding: 2px 0px;
+  width: 215px;
+}

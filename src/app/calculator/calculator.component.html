@@ -1,0 +1,69 @@
+<script src="https://code.iconify.design/1/1.0.5/iconify.min.js"></script>
+
+<div class="base dark container">
+  <div class="row">
+    <input type="text" id="formulabox" value="0" [(ngModel)]="text" readonly="readonly" autofocus onclick='this.select()'>
+  </div>
+  <div class="row">
+    <div class="btn-group">
+      <button (click)='this.addText("(")'>(</button>
+      <button (click)='this.addText(")")'>)</button>
+      <button (click)='this.clearText()'>C</button>
+      <button (click)='this.backspace()'><span class="iconify" data-icon="bx:bx-arrow-back" data-inline="false"></span></button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div class="btn-group">
+      <button (click)='this.oneDiv()'>1/x</button>
+      <button (click)='this.addText("^")'><span class="iconify" data-icon="mdi:exponent" data-inline="false"></span></button>
+      <button (click)='this.sqrt()'><span class="iconify" data-icon="mdi-square-root" data-inline="false"></span></button>
+      <button (click)='this.addText("/")'>/</button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div class="btn-group">
+      <button class="dark-btn" (click)='this.addText("7")'>7</button>
+      <button class="dark-btn" (click)='this.addText("8")'>8</button>
+      <button class="dark-btn" (click)='this.addText("9")'>9</button>
+      <button (click)='this.addText("*")'>x</button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div class="btn-group">
+      <button class="dark-btn" (click)='this.addText("4")'>4</button>
+      <button class="dark-btn" (click)='this.addText("5")'>5</button>
+      <button class="dark-btn" (click)='this.addText("6")'>6</button>
+      <button (click)='this.addText("-")'>-</button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div class="btn-group">
+      <button class="dark-btn" (click)='this.addText("1")'>1</button>
+      <button class="dark-btn" (click)='this.addText("2")'>2</button>
+      <button class="dark-btn" (click)='this.addText("3")'>3</button>
+      <button (click)='this.addText("+")'>+</button>
+    </div>
+  </div>
+  
+  <div class="row">
+    <div class="btn-group">
+      <button class="dark-btn" (click)='this.toggleSign()'>+/-</button>
+      <button class="dark-btn" (click)='this.addText("0")'>0</button>
+      <button class="dark-btn" (click)='this.addText(".")'>.</button>
+      <button class="blue-btn" (click)='this.evaluate()'>=</button>
+    </div>
+  </div>
+    
+</div>
+
+<accordion>
+  <panel title="About">
+    <h6>A simple calculator written in TypeScript</h6>
+    <p>It works by applying the shunting yard algorithm to the text input to get the expression in reverse polish notation, then it evaluates the expression to get the final result.</p>
+    <p>Styled after the calculator in Windows 10.</p>
+  </panel>
+</accordion>
