@@ -10,12 +10,14 @@ import { HazelComponent } from './hazel/hazel.component';
 import { ShooterComponent } from './shooter/shooter.component';
 import { CalculatorComponent } from './calculator/calculator.component';
 import { MorseCodeComponent } from './morse-code/morse-code.component';
+import { HitmanTSComponent } from './hitman-ts/hitman-ts.component';
 
 const routes: Routes = [
   { path: '', redirectTo: '/home', pathMatch: 'full'},
   { path: 'home', component: HomeComponent },
   { path: 'games/snake', component: SnakeComponent },
   { path: 'games/shooter', component: ShooterComponent },
+  { path: 'games/hitmanTS', component: HitmanTSComponent },
   { path: 'apps/calculator', component: CalculatorComponent },
   { path: 'apps/morsecode', component: MorseCodeComponent },
   { path: 'projects/tribe', component: TribeComponent },

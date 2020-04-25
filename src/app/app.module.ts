@@ -18,6 +18,9 @@ import { ImageboxComponent } from './imagebox/imagebox.component';
 import { ShooterComponent } from './shooter/shooter.component';
 import { CalculatorComponent } from './calculator/calculator.component';
 import { MorseCodeComponent } from './morse-code/morse-code.component';
+import { HitmanTSComponent } from './hitman-ts/hitman-ts.component';
+import { CmdComponent } from './cmd/cmd.component';
+import { HitmanNewGameComponent } from './hitman-new-game/hitman-new-game.component';
 
 @NgModule({
   declarations: [
@@ -36,6 +39,9 @@ import { MorseCodeComponent } from './morse-code/morse-code.component';
     ShooterComponent,
     CalculatorComponent,
     MorseCodeComponent,
+    HitmanTSComponent,
+    CmdComponent,
+    HitmanNewGameComponent,
   ],
   imports: [
     BrowserModule,
