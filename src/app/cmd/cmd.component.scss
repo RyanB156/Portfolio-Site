@@ -1,0 +1,69 @@
+
+$base-color: rgb(39, 51, 73);
+$font: monospace;
+
+p {
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+}
+
+// Entire cmd prompt.
+.cmd-box {
+  background-color: $base-color;
+  color: white;
+  margin: 0;
+  padding: 2px 5px;
+  font-family: $font;
+  font-size: 1.1em;
+  max-width: 700px;
+  height: 300px;
+  overflow: scroll;
+}
+
+// Box for output text.
+.output-box {
+  padding-bottom: 2px;
+  white-space: pre-wrap;
+}
+
+// Entire line for input.
+.input-box {
+  width: 100%;
+  padding-bottom: 65px;
+}
+
+// Prompt part of input.
+.prompt-box {
+  margin-right: 8px;
+  display: inline;
+}
+
+// Text input field for input.
+.input-text {
+  background-color: $base-color;
+  border: none;
+  color: white;
+  outline: none;
+  font-family: $font;
+  font-size: 1em;
+  width: 77%;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+  background: #f1f1f1; 
+}
+ 
+/* Handle */
+::-webkit-scrollbar-thumb {
+  background: rgb(122, 122, 122); 
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+  background: #555; 
+}

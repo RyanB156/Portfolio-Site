@@ -1,0 +1,68 @@
+
+.show {
+  display: block;
+}
+
+.hide {
+  display: none;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 900;
+  text-align: center;
+  background: rgba(170, 170, 170, 0.5);
+  padding: 5px 20px;
+  font-size: 1.2em;
+}
+
+.modal-content {
+  top: 25%;
+  margin: auto;
+  max-width: 700px;
+  color: black;
+  background-color: white;
+  display: flex;
+  align-items: center;
+  padding: 10px;
+}
+
+.form-inline {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+}
+
+.form-inline label {
+  margin: 5px 10px 5px 0;
+}
+
+input[type=text] {
+  width: 100%;
+  border: solid 1px rgb(182, 182, 182);
+}
+
+input[type=file] {
+  border: solid 1px rgb(182, 182, 182);
+  font-size: 0.8em;
+}
+
+.form-inline input {
+  vertical-align: middle;
+  margin: 5px 10px 5px 0;
+  padding: 10px;
+  background-color: #fff;
+  border: 1px solid #ddd;
+}
+
+.close-button {
+  width: 180px;
+}
+
+.footer {
+  padding-top: 50px;
+  padding-bottom: 10px;
+  text-align: center;
+}
