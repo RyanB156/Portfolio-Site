@@ -1,5 +1,5 @@
 import { Info } from './domain-types';
-import { PersonType, Person } from './Person';
+import { PersonType, Person } from './person';
 import { Personality } from './personality';
 import { Option } from './option';
 import { Item } from './item';
