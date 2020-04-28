@@ -52,6 +52,8 @@ export class Person {
   static defaultDamage = 10;
   static awareKnockoutChance = 20.0
   static defaultPoisonDamage = 10
+  static inquireInfo = ["name", "description", "type", "gender", "sexuality", "attraction", 
+  "trust", "mood", "ethics", "morality", "bravery", "health", "clue", "items"];
 
   private info: Info;
   private clueInfo: string;
@@ -110,8 +112,10 @@ export class Person {
 
   setDescription(newDescription) { this.info.description = newDescription; }
 
+  getCreatedNewLife() { return this.createdNewLife; }
   setCreatedNewLife(b) { this.createdNewLife = b; }
 
+  getGender() { return this.gender; }
 
 
   getIsHoldingWeapon() { return this.isHoldingWeapon; }
@@ -155,7 +159,7 @@ export class Person {
     this.action = newAction;
   }
 
-  printStates() {
+  printStats() {
     Std.writeLine("Attraction: " + this.personality.attraction.class);
     Std.writeLine("Trust: " + this.personality.trust.class);
     Std.writeLine("Mood: " + this.personality.mood.class);
@@ -278,9 +282,7 @@ export class Person {
       return `${this.info.name} does not trust you enough to give you any information`;
   }
 
-  stringToDataString(arg) {
-    let inquireInfo = ["name", "description", "type", "gender", "sexuality", "attraction", 
-      "trust", "mood", "ethics", "morality", "bravery", "health", "clue", "items"]
+  stringToDataString(arg) : Result.Result<string>{
     function inner(a) {
       switch (a) {
         case "name": return "Name: " + this.info.name;
@@ -303,12 +305,11 @@ export class Person {
           return `${this.info.name} items:\n${List.foldString((a, b) => a + b, itemNames, "")}`;
         default: return "Error in stringToDataString.inner";
       }
-      
-      if (inquireInfo.includes(arg))
-        return Result.makeSuccess(inner(arg));
-      else
-        return Result.makeFailure(`${arg} is not a valid question`);
     }
+    if (Person.inquireInfo.includes(arg))
+      return Result.makeSuccess(inner(arg));
+    else
+      return Result.makeFailure(`${arg} is not a valid question`);
   }
 
   addToInventory(item) { this.items.push(item); }

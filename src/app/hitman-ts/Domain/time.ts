@@ -15,4 +15,8 @@ export class Time {
     }
   }
 
+  asString() : string {
+    return `${this.hour}:${this.minute}`;
+  }
+
 }

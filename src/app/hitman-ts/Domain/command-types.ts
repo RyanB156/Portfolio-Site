@@ -4,7 +4,15 @@ import { Option } from "./option"
 export namespace CommandTypes {
 
   export type OptionArg = Option.Option<string>;
-  export type ViewArg = "Inventory" | "Time" | "PlayerStats" | "PersonStats of PersonName" | "CompanionName" | "Objectives" | "VisitedRooms"
+
+  export interface Inventory { kind: "Inventory" }
+  export interface Time { kind: "Time" }
+  export interface PlayerStats { kind: "PlayerStats" }
+  export interface PersonStats { kind: "PersonStats", personName: string }
+  export interface CompanionName { kind: "CompanionName" }
+  export interface Objectives { kind: "Objectives" }
+  export interface VisitedRooms { kind: "VisitedRooms" }
+  export type ViewArg = Inventory | Time | PlayerStats | PersonStats | CompanionName | Objectives | VisitedRooms
 
   export interface SearchArea { kind: "SearchArea" }
   export interface SearchItem { kind: "SearchItem", itemName: string}
@@ -25,7 +33,7 @@ export namespace CommandTypes {
 
 
   export interface Amuse { kind: "Amuse", personName: string }
-  export interface Apply { kind: "Apply", itemName: string }
+  export interface Apply { kind: "Apply", poisonName: string, targetName: string }
   export interface Approach { kind: "Approach", personName: string }
   export interface Attack { kind: "Attack", personName: string }
   export interface Capture { kind: "Capture", personName: string }

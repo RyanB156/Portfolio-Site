@@ -42,6 +42,7 @@ export class Environment {
   getTime() { return this.time; }
   getMap() { return this.roomMap; }
   getObjectives() { return this.objectives; }
+  getVisitedRooms() { return this.visitedRooms; }
   getAccolades() { return this.accolades; }
   getMoveCount() { return this.moveCount; }
   getStatus() { return this.gameStatus; }
@@ -49,6 +50,9 @@ export class Environment {
 
   getUpdatePeople() { return this.updatePeople; }
   setUpdatePeople(people) { this.updatePeople = people; }
+
+  setRoom(room: Room) { this.room = room; }
+  setMap(map: RoomMap) { this.roomMap = map; }
   
   // Update the player and check PlayerDead condition.
   checkPlayer() {

@@ -41,7 +41,7 @@ export namespace RoomTypes {
 export interface AdjacentRoom { kind: "AdjacentRoom"; name: string; lockState: LockState }
 export interface OverlookRooms { kind: "OverlookRooms"; rooms: Option.Option<string[]> }
 
-export interface RoomMap { kind: "RoomMap"; currentRoom: string; adjacentRooms: AdjacentRoom[]; overlookRooms: OverlookRooms[]}
+export interface RoomMap { kind: "RoomMap"; currentRoom: string; adjacentRooms: AdjacentRoom[]; overlookRooms: OverlookRooms}
 export interface RoomConnect { kind: "RoomConnect"; room: Room; roomMap: RoomMap; spawnRoom: SpawnRoom}
 
 export interface RoomInfo { kind: "RoomInfo"; room: Room; roomMap: RoomMap }

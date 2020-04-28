@@ -45,6 +45,8 @@ export class Player {
     return damage;
   }
 
+  getItems() { return this.items; }
+
   getHealth() { return this.health; }
   addHealth(health) { this.health += health; }
   applyDamage(damage) { this.health -= damage; }
@@ -117,6 +119,7 @@ export class Player {
   setDisguise(disguise: Option.Option<PersonType>) { this.disguise = disguise; }
 
   getEquippedItem() { return this.equippedItem; }
+  unequipItem() { this.equippedItem = Option.makeNone(); }
   equipItem(item: Item) { this.equippedItem = Option.makeSome(item); }
 
   removeEquippedItemCheck(item: Item) {

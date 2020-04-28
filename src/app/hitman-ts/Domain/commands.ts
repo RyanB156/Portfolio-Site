@@ -2,15 +2,15 @@ import { List } from './list';
 import { Std } from './std';
 import { Result } from './result';
 import { Option } from './option';
-import { Person, AICall } from './person';
+import { Person, AICall, RespawnData } from './person';
 import { Random } from './random';
 import { Personality } from './personality';
 import { Environment } from './environment';
-import { Item, getNameWithType, fire } from './item';
+import { Item, getNameWithType, isHeavy, removeItem } from './item';
 import { CommandTypes } from './command-types';
-import { AdjacentRoom, Room } from './room';
+import { AdjacentRoom, Room, RoomMap } from './room';
 import { Objective } from './objective';
-import { stringify } from 'querystring';
+import { PeopleData } from './people-data';
 
 export namespace Commands {
 
@@ -59,7 +59,7 @@ export namespace Commands {
     ["wait", "wait - Do nothing and allow the ai to take a turn"],
   ]);
 
-  let aiCommandList = [ "pickup", "attack", "goto", "stop", "killyourself" ];
+  export let aiCommandList = [ "pickup", "attack", "goto", "stop", "killyourself" ];
 
   // Creates a list of the elements in a list that match a given pattern in ascending order.
   function getSuggestions(matchStrings: string[], pattern: string) : [number, string][] {
@@ -74,17 +74,22 @@ export namespace Commands {
     });
   }
 
-  export function getCmdSuggestions(str: string, minVal: number) {
-    let suggestions = getSuggestions(Array.from(commandList.keys()), str);
+  // Get a list of suggestions for the specified command.
+  export function getCmdSuggestions(command: string, minVal: number) {
+    // Use the list of commands from the help dictionary as the list of available commands.
+    let suggestions = getSuggestions(Array.from(commandList.keys()), command);
     return suggestions.filter(pair => pair[0] >= minVal);
   }
 
-  export function printSuggestion(str: string, minVal: number) {
+  // Print suggestions for a command to the screen.
+  export function printSuggestions(str: string, minVal: number) : string {
     let suggestions = getCmdSuggestions(str, minVal);
+    let suggestionString = "";
     if (suggestions.length > 0) {
       Std.writeLine("Did you mean... :");
-      suggestions.forEach(e => Std.writeLine(e[1].toUpperCase()));
+      suggestions.forEach(e => str + " " + (e[1].toUpperCase()));
     }
+    return suggestionString;
   }
 
 // Tell a joke to lift a person's spirits.
@@ -244,7 +249,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
 
 
   // Recruit a scared person to gain an extra life.
-  export function capture(personName: string, env: Environment) {
+  export function capture(personName: string, env: Environment) : Result.Result<AICall> {
     // Remove the companion when you capture them.
     let companionOption = env.getPlayer().getCompanion();
     if (companionOption.kind === "Some")
@@ -646,553 +651,687 @@ export function amuse(personName, env) : Result.Result<AICall> {
   }
   
 
-  /*
-  // Move to the specified location, if possible.
   export function goto(arg: CommandTypes.OptionArg, force: boolean, env: Environment) : Result.Result<AICall> {
 
-    // Process moving into the room with a companion and alerting any guards if the area is restricted.
-    function travelToRoom(loadedRoom: Room, roomName: string, alertGuards: boolean) {
-      
-    }
+    // Process moving into the room with a companion.
+    function travelToRoom(loadedRoom: Room, roomName: string, map: RoomMap, alertGuards: boolean) : Result.Result<AICall> {
 
-    //let travelToRoom loadedRoom roomName map alertGuards =
-      let rec takeCompanion tempEnv = 
-          match tempEnv.Player.CompanionName with
-          | None ->
-              RoomIO.writeToFile (tempEnv.Room, env.Map)  // Save old room information to a file.
-              printfn "Moved to %s" roomName; 
-              // Apply status updates if the player has been in this room already and then returns.
-              {tempEnv with Room = loadedRoom; Map = map}
-          | Some companionName ->                                    // Player's companion follows them to the next room.
-              match tempEnv |> Environment.tryFindPersonByName companionName with
-              | None -> failwithf "Error finding companion %s in the room. Commands.goto.travelToRoom" companionName
-              | Some companion when companion.State = SNormal ->
-                  printfn "Moved to %s with %s" roomName companionName
-                  let newPrevRoom = {tempEnv.Room with People = tempEnv.Room.People |> List.removeOne companion} // Take the companion out of the current room,
-                  RoomIO.writeToFile (newPrevRoom, tempEnv.Map)                                                 
-                      
-                  let newLoadedRoom = {loadedRoom with People = companion::loadedRoom.People} // and add it to the loaded room. 
-                  {tempEnv with Room = newLoadedRoom; Map = map}  // Return updated environment.
-              | _ -> 
-                  let newPlayer = {tempEnv.Player with CompanionName = None}
-                  let newEnvironment = tempEnv |> Environment.updatePlayer newPlayer
-                  takeCompanion newEnvironment
+      function takeCompanion(tempEnv: Environment) {
+        let companionOption = tempEnv.getPlayer().getCompanion();
+        if (companionOption.kind === "None") {
+          Std.writeRoom(tempEnv.getRoom(), tempEnv.getMap());
+          Std.writeLine(`Moved to ${roomName}`);
+          tempEnv.setRoom(loadedRoom);
+          tempEnv.setMap(map);
+        }
+        else {
+          let personResult = tempEnv.tryFindPersonByName(companionOption.value);
+          if (personResult.kind === "None")
+            Std.writeLine(`Error finding companion ${companionOption.value} in the room. Commands.goto.travelToRoom`);
+          else if (personResult.value.getState() === "SNormal") {
+            Std.writeLine(`Moved to ${roomName} with ${personResult.value.getName()}`);
+            let newPrevRoom = tempEnv.getRoom();
+            newPrevRoom.removePerson(personResult.value);
+            Std.writeRoom(newPrevRoom, tempEnv.getMap());
+            loadedRoom.addPerson(personResult.value);
+            tempEnv.setRoom(loadedRoom);
+            tempEnv.setMap(map);
+          } else {
+            tempEnv.getPlayer().setCompanion(Option.makeNone());
+            takeCompanion(tempEnv);
+          }
+        }
+      }
 
       // Remove stored status people upon entering the new room.
-      let removeOldStatusPeople env =                             // Person not updated when returning to the room. Dead from poison -> still alive...
-      {env with UpdatePeople = env.UpdatePeople 
-              |> List.filter (fun p -> loadedRoom.People |> List.map Person.getName |> List.contains (p.Info.Name) |> not)}
+      function removeOldStatusPeople(env: Environment) {
+        let peopleNames = List.map((p: Person) => p.getName().toLowerCase(), loadedRoom.getPeople());
+        env.setUpdatePeople(env.getUpdatePeople().filter(p => {
+          return peopleNames.includes(p.getName().toLowerCase());
+        }));
+      }
+      
       // Add new stored status people from the old room (env.Room)
-      let addNewStatusPeople env =                                // This one works though...
-          {env with UpdatePeople = env.UpdatePeople @ (env.Room.People |> List.filter Person.hasStatusEffect)}
+      function addNewStatusPeople(env: Environment) {
+        env.setUpdatePeople(env.getUpdatePeople().concat(env.getRoom().getPeople().filter(p => p.hasStatusEffect())));
+      }
+      
       // Add status effected people to env.UpdatePeople from env.Room.People. Replace people in newRoom.People with people in env.UpdatePeople.
-      let applyUpdateStatus (env:Environment) = 
-          {env with Room = env.UpdatePeople |> List.fold (fun room p -> room |> Room.updatePerson p) env.Room}
+      function applyUpdateStatus(env: Environment) {
+        let room = env.getRoom();
+        env.getUpdatePeople().forEach(p => room.updatePerson(p));
+      }
 
-      let newEnvironment = env |> addNewStatusPeople |> takeCompanion |> applyUpdateStatus |> removeOldStatusPeople |> Environment.addVisited roomName
+      addNewStatusPeople(env);
+      takeCompanion(env);
+      applyUpdateStatus(env);
+      removeOldStatusPeople(env);
+      env.addVisited(roomName);
 
-      if alertGuards || force then Success (newEnvironment, AIAlert TPlayer)
-      else Success (newEnvironment, AIMove)
 
-      
+      if (alertGuards || force)
+        return Result.makeSuccess({ kind: "AIAlert", target: {kind: "TPlayer" } });
+      else
+        return Result.makeSuccess({ kind: "AIMove" });
 
+    }
+
+    let adjacentRooms = env.getMap().adjacentRooms;
+    
+    // No option -> display nearby rooms.
+    if (arg.kind === "None") {
+      // Only display rooms that are not secret.
+      adjacentRooms.filter(a => !a.lockState).sort((a, b) => {
+        if (!a.lockState && b.lockState) return -1;
+        else if (a.lockState && !b.lockState) return 1;
+        else return 0;
+      }).forEach(a => Std.writeLine(`${a.name} - ${a.lockState}`));
+      return Result.makeSuccess({ kind: "AIWait" }); // Viewing nearby rooms does not trigger the ai.
+    } else { // Option -> Try to move to the specified room.
+
+      let roomName = arg.value;
+      if (arg.value === env.getRoom().getName().toLowerCase())
+        return Result.makeFailure("You are already there");
+      else {
+        let roomOpt = List.tryFind((a: AdjacentRoom) => a.name.toLowerCase() === arg.value, adjacentRooms);
+
+        function successF() : Result.Result<AICall> {
+          let roomResult = Std.readRoom(roomName);
+          if (roomResult.kind === "Failure")
+            return roomResult;
+          else {
+            let [loadedRoom, map] = roomResult.value;
+            let warningGuardsOpt = List.tryFind((p: Person) => p.getAwareness().kind === "Warn", loadedRoom.getPeople());
+            if (warningGuardsOpt.kind === "Some" && env.getPlayer().getDisguise().kind === "None")
+              return travelToRoom(loadedRoom, roomName, map, true);
+            else
+              return travelToRoom(loadedRoom, roomName, map, false);
+
+          }
+        }
+
+        if (roomOpt.kind === "None")
+          return Result.makeFailure(`${roomName} is not a nearby location`);
+        else {
+          if (roomOpt.value.lockState.kind === "Locked" && force)
+            Std.writeLine(`You broke into ${roomName}. The guards have been alerted.`);
+          else if (roomOpt.value.lockState.kind === "Locked")
+            return Result.makeFailure(`${roomName} is locked. ${roomOpt.value.lockState.code} key required`);
+          return successF();
+        }
+      }
+    }
   }
-
-  //let goto arg force env = 
-
-      
-          
-
-      let (_, adjacentRooms, _) = env.Map
-      match arg with
-      | Empty -> 
-          adjacentRooms |> List.filter (fun (n,l) -> match l with | Secret -> false | _ -> true) 
-              |> List.sortBy (fun (n,l) -> match l with | Unlocked -> 0 | _ -> 10)
-              |> List.iter (fun (name, lockState) -> printfn "%s - %A" name lockState)
-          Success (env, AIWait) // Viewing nearby rooms does not trigger the ai.
-      | Arg roomName -> 
-          if roomName = (env.Room |> Room.getName |> String.toLower) then Failure ("You are already there") else
-          let roomOpt = adjacentRooms |> List.tryFind (fst >> String.toLower >> (=) roomName) // Gets the CamelCase version of the name by searching the adjacent rooms list.
-
-          let successF =
-              match RoomIO.readFromFile roomName with // Load new room information from a file using name from List.tryFind.
-              | Failure s -> Failure s // Internal matching error.
-              | Success (loadedRoom, map) ->      // New room loaded from file.
-                  match loadedRoom.People |> List.tryFind (Person.getAwareness >> (=) Warn) with
-                  | Some guard when env.Player.Disguise.IsSome |> not -> 
-                      printfn "%s: You are not allowed to be here" guard.Info.Name // Guards can patrol certain restricted areas. They will become hostile on entering.
-                          travelToRoom loadedRoom roomName map true
-                  | _ -> travelToRoom loadedRoom roomName map false
-          match roomOpt with
-          | None -> Failure (sprintf "%s is not a nearby location" roomName) // Not listed in nearby locations.
-          | Some (_,Unlocked) | Some (_,Secret) -> successF   // Is nearby and accessible.
-          | Some (_,(Locked code)) when force -> 
-              // Forcing the room open, ignore locked doors, alerts guards in next room.
-              printfn "You broke into %s. The guards have been alerted." roomName; successF 
-              
-          | Some (_,Locked code) -> Failure (sprintf "%s is locked. %A key required" roomName code) // Is locked.
 
   // Force your way into a room. Uses "goto arg (true) env".
   export function forceGoto(arg: CommandTypes.OptionArg, env: Environment) {
     return goto(arg, true, env);
   }
-
-*/
-
-
-/*
           
-  /// Display list of possible commands.
-  let help arg env =
-      match arg with
-      | Empty -> commandList |> List.iter (snd >> printfn "%s"); Success (env, AIWait)
-      | Arg c ->
-          match List.tryFind (fst >> (=) c) commandList with
-          | None -> Failure (sprintf "The command %s is not listed under HELP\n" c + printSuggestion c)
-          | Some (name,info) -> printfn "%s" info; Success (env, AIWait)
+  // Display list of possible commands.
+  export function help(arg: CommandTypes.OptionArg) : Result.Result<AICall> {
+    if (arg.kind === "None") {
+      commandList.forEach((v, k, m) => Std.writeLine(k + ": " + v));
+      return Result.makeSuccess({ kind: "AIWait" });
+    } else {
+      let cmdDescription = commandList.get(arg.value);
+      if (cmdDescription === undefined || cmdDescription === null) {
+        return Result.makeFailure(`The command ${arg.value} is not listed under HELP\n` + printSuggestion(arg.value, 4));
+      } else {
+        Std.writeLine(cmdDescription);
+        return Result.makeSuccess({ kind: "AIWait" });
+      }
+    }
+  }
 
-  /// Get information from/about nearby people.
-  let inquire question personName env =
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person when person.State <> Dead -> 
-          if Person.queryTrust person <= 2 then Failure (sprintf "%s does not trust you enough to disclose their %s" personName question) else
-          match Person.stringToDataString question person with
-          | Failure f -> Failure f
-          | Success response -> 
-              printfn "Response: \n%s" response
-              let newPerson = person |> Person.trySetAwareness Aware
-              let newEnvironment = env |> Environment.updatePerson newPerson
-              Success (newEnvironment, AIMove)
-      | Some person -> Failure (sprintf "%s is dead" person.Info.Name)
+  // Get information from/about nearby people.
+  export function inquire(question: string, personName: string, env: Environment) : Result.Result<AICall> {
+    let personResult = env.tryFindPersonByName(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+    else if (personResult.value.getState() === "Dead")
+      return Result.makeFailure(`${personResult.value.getName()} is dead`);
+    else {
+      if (personResult.value.queryTrust() <= 2)
+        return Result.makeFailure(`${personResult.value.getName()} does not trust you enough to disclose their ${question}`);
+      else {
+        let dataStringResult = personResult.value.stringToDataString(question);
+        if (dataStringResult.kind === "Failure")
+          return dataStringResult;
+        else {
+          Std.writeLine(`Response: \n${dataStringResult.value}`);
+          personResult.value.trySetAwareness({ kind: "Aware" });
+          return Result.makeSuccess({ kind: "AIMove" });
+        }
+      }
+    }
 
-  /// Reveal information about clues.
-  let inspect itemName env =
-      let findItem () =
-          match env.Player |> Player.tryFindItemByName itemName with
-          | Some item -> Some item
-          | None ->
-              match env.Room |> Room.tryFindItemByName itemName with
-              | Some item -> Some item
-              | None -> None
-      match findItem () with
-      | None -> Failure.roomItemFindFailure itemName env.Room.Info.Name
-      | Some (Clue (info, clueInfo)) ->
-          printfn "Clue - %s:\n%s" itemName clueInfo
-          Success (env, AIWait)
-      | Some (HiddenPassageway (info, roomNames)) -> 
-          printfn "Hidden Passageway revealed: \n"; roomNames |> List.iter (printfn "%s")
-          let newEnvironment = env |> Environment.revealPassageways
-          Success (newEnvironment, AIWait)
-      | _ -> Failure (sprintf "%s is not a clue" itemName)
-
-  /// Intimidate a person to make them afraid of you. Lower there resistance to your influence.
-  let intimidate personName env =
-      let getFearIncrease person =
-          match person.Personality.Bravery with
-          | BFearful -> 3, true
-          | BNeutral -> 1, true
-          | BBrave -> 0, false
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person when person.State <> Dead ->
-          match getFearIncrease person with
-          | _, false -> printfn "%s will not be intimidated by you" person.Info.Name; Success (env, AIMove)
-          | x, true ->
-              match person.Personality.Fear |> Personality.adjustFear (Up x) with
-              | Failure f -> Failure f
-              | Success newFear ->
-                  if env.Rng.Next(0, x+1) = 0 then    // Random chance for the person to attack based on their bravery stat.
-                      
-                      printfn "The guards have been alerted"
-                      let (newPlayer,damage) = env.Player |> Player.applyAngryAttack env.Rng
-                      printfn "%s resisted your attempts to intimidate %s. %s attacked you for %d damage" 
-                          person.Info.Name (person |> Person.getGenderObjectiveString) (person |> Person.getGenderPronounString) damage
-                      let newEnvironment = env |> Environment.updatePlayer newPlayer |> Environment.applyBadActionToAll
-                      Success (newEnvironment, AIAlert TPlayer)   // Alert guards on a failed "intimidate" command.
-                  else
-                      let name = person.Info.Name
-                      printfn "You increased %s's fear of you. %s is now %s" name name (newFear |> fst |> Personality.getFearAsString)
-                      let newPerson = person |> Person.setFear newFear |> Person.trySetAwareness Aware
-                      let newEnvironment = env |> Environment.updatePerson newPerson |> Environment.applyBadActionToAll
-                      Success (newEnvironment, AIMove)
-      | Some person -> Failure (sprintf "%s is dead" person.Info.Name)
-
-  /// Tell a person to stop following you.
-  let leaveMe env =
-      match env.Player.CompanionName with
-      | None -> Failure ("You do not have a companion")
-      | Some companionName ->
-          printfn "You have left your companion: %s" companionName
-          let newPlayer = {env.Player with CompanionName = None}
-          let newEnvironment = env |> Environment.updatePlayer newPlayer
-          Success (newEnvironment, AIMove)
-          
-
-  /// View people and items in the next room.
-  let peek arg env =
-      let _, adjRooms, _ = env.Map
-      let adjRoomNames = adjRooms |> List.map (fst >> String.toLower)
-      if List.contains arg adjRoomNames then
-          match RoomIO.readFromFile arg with
-          | Failure f -> Failure f
-          | Success (adjRoom, _) ->
-              printfn "Items:"
-              adjRoom.Items |> List.iter (Item.getNameWithType >> printfn "%s")
-              printfn "People:"
-              adjRoom.People |> List.iter (Person.getFullInfoStr >> printfn "%s")
-              Success (env, AIMove)
-      else Failure (sprintf "%s is not an adjacent area" arg)
+  }
 
 
-  /// Add item from the environment to inventory.
-  let pickup itemName env =
-      let intelCheck item env =
-          match item with
-          | Intel _ -> Environment.checkItemObjectives item env
-          | _ -> env
-      match Room.tryFindItemByName itemName env.Room with
-      | None -> Failure.roomItemFindFailure itemName env.Room.Info.Name
-      | Some item -> 
-          if item |> Item.isHeavy then Failure (sprintf "The item %s is too heavy to pick up" itemName) else
-          printfn "You picked up %s" itemName
-          let player = env.Player
-          let newPlayer = {player with Items = item::player.Items}
-          let newEnvironment = 
-              env
-              |> Environment.updateItems (List.removeOne item)
-              |> Environment.updatePlayer newPlayer
-              |> intelCheck item
-          Success (newEnvironment, AIMove)
+  // Reveal information about clues.
+  export function inspect(itemName: string, env: Environment) : Result.Result<AICall> {
+    let items = env.getPlayer().getItems().concat(env.getRoom().getItems()).filter((i: Item) => i.kind === "Clue" || i.kind === "HiddenPassageway");
+    let itemResult = List.tryFind((i: Item) => i.info.name.toLowerCase() === itemName, items);
+    if (itemResult.kind === "None") {
+      return Result.roomItemFindFailure(itemName, env.getRoom().getName());
+    } else if (itemResult.value.kind === "Clue") {
+      Std.writeLine(`Clue - ${itemResult.value.info.name}:\n${itemResult.value.clueInfo}`)
+      return Result.makeSuccess({ kind: "AIWait" })
+    } else if (itemResult.value.kind === "HiddenPassageway") {
+      Std.writeLine("Hidden Passage way revealed: \n");
+      itemResult.value.rooms.forEach(s => Std.writeLine(s));
+      env.revealPassageways();
+      return Result.makeSuccess({ kind: "AIWait" })
+    } else {
+      return Result.makeFailure(`${itemName} is not a clue`);
+    }
+  }
 
-  /// Place an item in a container.
-  let place itemName targetName env =
-      match Room.tryFindItemByName targetName env.Room with
-      | None -> Failure.roomItemFindFailure itemName env.Room.Info.Name
-      | Some (Container (items,info)) -> 
-          match Player.tryFindItemByName itemName env.Player with
-          | None -> Failure.inventoryItemFindFailure itemName
-          | Some playerItem -> 
-              printfn "You put %s in %s" itemName targetName
-              let newPlayer =
-                  {env.Player with Items = env.Player.Items |> List.removeOne playerItem}
-                  |> Player.removeEquippedItemCheck playerItem
-              let newContainer = Container (playerItem::items, info)
-              let newEnvironment =
-                  env
-                  |> Environment.updateItems (List.replaceByWith (Item.getName >> String.toLower >> (=) targetName) newContainer)
-                  |> Environment.updatePlayer newPlayer
-              Success (newEnvironment, AIMove)
-      | Some _ -> Failure (sprintf "The item %s cannot store any items" targetName)
+  // Intimidate a person to make them afraid of you. Lower there resistance to your influence.
+  export function intimidate(personName: string, env: Environment) : Result.Result<AICall> {
+    function getFearIncrease(person: Person) : [number, boolean] {
+      switch (person.getBravery()) {
+        case "BNeutral": return [3, true];
+        case "BNeutral": return [1, true];
+        case "BBrave": return [0, false];
+      }      
+    }
 
-  /// Hit a person with your fists. Does not require ammo. Never misses. Small amount of damage. Must be close to the person.
-  let punch personName env =
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person ->
-          match env.Player.CloseTarget with
-          | Some cTarget when cTarget |> String.toLower = personName ->
-              let attackDamage = 10
-              match person |> Person.applyAttack attackDamage env.Rng (Some 8) false with
-              | Failure f -> Failure f
-              | Success newPerson ->
-                  printfn "You punched %s for %d damage" cTarget attackDamage
-                  printfn "%s:\nHealth: %d, State: %s, Awareness: %s" personName newPerson.Health (newPerson |> Person.getStateAsString) (newPerson.Awareness |> Person.getAwarenessAsString)
-                  
-                  let newPlayer = env.Player |> Player.updateCloseTarget newPerson
-                  let newEnvironment = env |> Environment.updatePerson newPerson |> Environment.updatePlayer newPlayer
-                  let personIsDead = if newPerson.State = Dead then printfn "%s is dead" (person |> Person.getName); true else false
-                  let newEnvironment =
-                      match personIsDead with
-                      | true -> newEnvironment |> Environment.checkPersonObjectives newPerson // Check if the dead person fills a mission objective.
-                      | false -> newEnvironment
-                  Success (newEnvironment |> Environment.applyBadActionToAll , AIMove)
-          | _ -> Failure (sprintf "%s is not in range for melee attacks" personName)
+    let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+    else if (personResult.value.getState() === "Dead")
+      return Result.makeFailure(`${personResult.value.getName()} is dead`);
+    else {
+      let fearIncrease = getFearIncrease(personResult.value);
+      if (!fearIncrease[1]) {
+        Std.writeLine(`${personResult.value.getName()} wil not be intimidated by you`);
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else {
+        let adjustResult = Personality.adjustFear({ kind: "Up", value: fearIncrease[0] }, personResult.value.getFear());
+        if (adjustResult.kind === "Failure")
+          return adjustResult;
+        else {
+          if (Random.nextInt(0, fearIncrease[0]) === 0) {
+            Std.writeLine("The guards have beeen alerted");
+            let damage = env.getPlayer().applyAngryAttack();
+            Std.writeLine(`${personResult.value.getName()} resisted your attempts to intimidate ${personResult.value.getGenderObjectiveString()}. ${personResult.value.getGenderPronounString()} attacked you for ${damage}`);
+            env.applyBadActionToAll();
+            return Result.makeSuccess({ kind: "AIAlert", target: { kind: "TPlayer" } });
+          } else {
+            let name = personResult.value.getName();
+            Std.writeLine(`You increased ${name}'s fear of you. ${name} is now ${adjustResult.value.class}`);
+            personResult.value.setFear(adjustResult.value);
+            personResult.value.trySetAwareness({ kind: "Aware" });
+            env.applyBadActionToAll();
+            return Result.makeSuccess({ kind: "AIMove" });
+          }
+        }
+      }
+    }
+  }
 
-  /// Exit the game.
-  let quit env = Success ({env with GameStatus = Exit}, AIWait)
+  // Tell a person to stop following you.
+  export function leaveMe(env: Environment) : Result.Result<AICall> {
+    let companionOpt = env.getPlayer().getCompanion();
+    if (companionOpt.kind === "None")
+      return Result.makeFailure("You do not have a companion");
+    else {
+      env.getPlayer().setCompanion(Option.makeNone());
+      return Result.makeSuccess({ kind: "AIMove" });
+    }
+  }
 
-  /// Romance a person and generate a new life.
-  let romance personName env =
+  // View people and items in the next room.
+  export function peek(arg: string, env: Environment) : Result.Result<AICall> {
+    let adjRooms = env.getMap().adjacentRooms;
+    let adjRoomNames = List.map((a: AdjacentRoom) => a.name.toLowerCase(), adjRooms);
+    if (adjRoomNames.includes(arg)) {
+      let roomResult = Std.readRoom(arg);
+      if (roomResult.kind === "Success") {
+        Std.writeLine("Items:");
+        roomResult.value[0].getItems().forEach(i => Std.writeLine(getNameWithType(i)));
+        Std.writeLine("People:");
+        roomResult.value[0].getPeople().forEach(p => Std.writeLine(p.getFullInfoStr()));
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else {
+        return roomResult;
+      }
+    } else {
+      return Result.makeFailure(`${arg} is not an adjacent area`);
+    }
+  }
 
-      let getNewLife =    // Get a randomly selected name and gender from the WorldGeneration file PeopleData.fs
-          let name = PeopleData.names |> List.randomChoice env.Rng
-          let gender = PeopleData.getGenderByChance env.Rng
-          name, gender
-      let getResultStr genderA genderB =
-          if genderA = genderB then "adopted" else "birthed"
-      let gCheck person env =
-          let newLife = getNewLife
-          if Person.getCompatability env.Player.Gender person then printfn "New life added: %A" newLife; env |> Environment.addLife newLife
-          else env
+  // Add item from the environment to inventory.
+  export function pickup(itemName: string, env: Environment) : Result.Result<AICall> {
+    let itemResult = env.getRoom().tryFindItemByName(itemName);
+    if (itemResult.kind === "None") {
+      return Result.roomItemFindFailure(itemName, env.getRoom().getName());
+    } else if (isHeavy(itemResult.value)) {
+      return Result.makeFailure(`The item ${itemName} is too heavy to pick up`);
+    } else {
+      Std.writeLine("You picked up " + itemName);
+      env.getPlayer().addToInventory(itemResult.value);
+      env.checkItemObjectives(itemResult.value);
+      return Result.makeSuccess({ kind: "AIMove" });
+    }
+  }
 
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person ->
-          if person.CreatedNewLife then Failure (sprintf "You have already created a new life with %s" person.Info.Name) else
-          if env.Room.People 
-              |> List.filter (fun p -> match p.State with | SNormal -> true | _ -> false) 
-              |> List.length > 1 then Failure ("There are too many people around to do that") else
-          match person |> Person.getAttraction |> fst with
-          | Love ->
-              let newLife = getNewLife
-              printfn "You and %s %s a new person" person.Info.Name (getResultStr env.Player.Gender person.Gender)
-              printfn "New life added: %A" newLife
-              let newPerson = person |> Person.setCreatedNewLife true
-              let newEnvironment = env |> Environment.addLife newLife |> Environment.updatePerson newPerson
-              Success (newEnvironment, AIMove)
-          | _ ->
-              match person.State with
-              | Dead -> Failure (sprintf "You perve, %s is dead!" person.Info.Name)
-              | SNormal ->
-                  printf "%s does not like you enough for romance. Are you sure? (y/n): " person.Info.Name
-                  match System.Console.ReadLine() with    // Give the player the option to commit rape or not.
-                  | "y" | "Y" ->
-                      let (newPlayer, damage) = env.Player |> Player.applyAngryAttack env.Rng
-                      printfn "%s did not take kindly to that. %s attacked you for %d damage" person.Info.Name (person |> Person.getGenderPronounString) damage
-                      let newPerson = person |> Person.setAttraction (Hate, 0) |> Person.setCreatedNewLife true
-                      let newEnvironment = 
-                          env |> Environment.updatePlayer newPlayer 
-                          |> Environment.updatePerson newPerson |> gCheck person
-                          |> Environment.applyBadActionToAll 
-                      Success (newEnvironment, AIAlert TPlayer)
-                  | _ -> Success (env, AIMove)
-              | _ ->  // The person is asleep/unconscious/drunk so they do not resist. Affects nearby people though.
-                  let newPerson = person |> Person.setCreatedNewLife true
-                  let newEnvironment = env |> Environment.updatePerson newPerson |> gCheck person |> Environment.applyBadActionToAll 
-                  Success (newEnvironment, AIMove)
-              
+  // Place an item in a container.
+  export function place(itemName: string, targetName: string, env: Environment) : Result.Result<AICall> {
+    let targetResult = env.getRoom().tryFindItemByName(targetName);
+    if (targetResult.kind === "None")
+      return Result.roomItemFindFailure(targetName, env.getRoom().getName());
+    else {
+      let itemResult = env.getPlayer().tryFindItemByName(itemName);
+      if (itemResult.kind === "None")
+        return Result.inventoryItemFindFailure(itemName);
+      else if (targetResult.value.kind === "Container" ){
+        Std.writeLine(`You put ${itemName} in ${targetName}`);
+        env.getPlayer().removeFromInventory(itemResult.value);
+        env.getPlayer().removeEquippedItemCheck(itemResult.value);
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else {
+        return Result.makeFailure(`The item ${targetName} cannot store items`);
+      }
+    }
+  }
 
-  /// Save the game.
-  let save env = 
-      printfn "You saved the game"
-      EnvironmentIO.writeToFile env
-      RoomIO.writeToFile (env.Room, env.Map)
-      Success ({env with GameStatus = Continue}, AIWait)
+  // Hit a person with your fists. Does not require ammo. Never misses. Small amount of damage. Must be close to the person.
+  export function punch(personName: string, env: Environment) : Result.Result<AICall> {
+    let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+      else {
+        let closeTargetOpt = env.getPlayer().getCloseTarget();
+        if (closeTargetOpt.kind === "Some" && closeTargetOpt.value.toLowerCase() === personName) {
+          let damage = 10;
+          personResult.value.applyAttack(damage, Option.makeSome(8), false);
+          Std.writeLine(`You punched ${personResult.value.getName()}`)
+          Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwareness()}`);
+          if (personResult.value.getState() === "Dead") {
+            Std.writeLine(personResult.value.getName() + " is dead");
+            env.checkPersonObjectives(personResult.value);
+            env.applyBadActionToAll();
+            return Result.makeSuccess({ kind: "AIMove" });
+          }
+        } else {
+          return Result.makeFailure(personName + " is not in range for melee attacks");
+        }
+      }
+  }
 
-  /// Scout a distant area.
-  let scout roomName env =
-      let (_,_,oRoomsOpt) = env.Map
-      match oRoomsOpt with
-      | None -> Failure "The current location does not have any scoutable locations"
-      | Some oRooms ->
-          match oRooms |> List.tryFind (String.toLower >> (=) roomName) with
-          | None -> Failure (sprintf "%s is not a scoutable location" roomName)
-          | Some roomStr ->
-              match RoomIO.readFromFile roomStr with
-              | Failure f -> Failure f
-              | Success (room,_) ->
-                  printfn "Scout:"
-                  room.People |> List.iter (Person.getName >> printfn "%s")
-                  Success (env, AIWait)
+  // Exit the game.
+  export function quit(env: Environment) : Result.Result<AICall> {
+    env.setStatus("Exit");
+    return Result.makeSuccess({ kind: "AIWait" });
+  }
+  
+  // Romance a person and generate a new life.
+  export function romance(personName: string, env: Environment) : Result.Result<AICall> {
 
-
-  /// Search for items and people in a location.
-  let search arg env = 
-      match arg with
-      | SearchArea -> 
-          printfn "Items:"
-          env.Room.Items |> List.iter (Item.getNameWithType >> printfn "%s")
-          printfn "People:"
-          env.Room.People |> List.sortBy (fun p -> match p.State with | SNormal -> 0 | _ -> 10) |> List.iter (Person.getFullInfoStr >> printfn "%s")
-          Success (env, AIWait)
-      | SearchItem itemName ->
-          match Room.tryFindItemByName itemName env.Room with
-          | None -> Failure.roomItemFindFailure itemName env.Room.Info.Name
-          | Some s -> 
-              match Item.getItems s with
-              | None -> Failure (sprintf "The item %s does not contain any items" itemName)
-              | Some [] -> printfn "%s is empty" itemName; Success (env, AIWait)
-              | Some items -> 
-                  printfn "%s Items:" itemName
-                  items |> List.iter (Item.getNameWithType >> printfn "%s")
-                  Success (env, AIWait)
-
-  /// Seduce a person. Large increase to attraction. Chance for failure.
-  let seduce personName env =
-      let trySetFullAttraction person =
-          match person |> Person.getCompatability env.Player.Gender with
-          | false -> printfn "%s does not swing your way" (person.Info.Name); person
-          | true ->
-              printfn "%s accepted your advances" person.Info.Name
-              if Person.queryAttraction person = 10 then printfn "%s's attraction is already maxed out" person.Info.Name; person
-              else printfn "You maxed out %s's attraction and trust to you" person.Info.Name; 
-                      person |> Person.setAttraction (Love, 10) |> Person.setTrust (TFull, 10)
-
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person ->
-          match person |> Person.getMoralityBasedChance env.Rng with
-          | false ->
-              printfn "%s did not take kindly to your advances. You lost all of %s attraction and trust." person.Info.Name (Person.getPossessiveGenderString person)
-              let (newPlayer, damage) = env.Player |> Player.applyAngryAttack env.Rng
-              printfn "%s attacked you for %d damage" person.Info.Name damage
-              let newPerson = person |> Person.setAttraction (Hate, 0) |> Person.setTrust (TMistrust, 0)
-              let newEnvironment = env |> Environment.updatePerson newPerson |> Environment.updatePlayer newPlayer
-              Success (newEnvironment, AIMove)
-          | true ->
-              let newPerson = person |> trySetFullAttraction |> Person.trySetAwareness Aware
-              let newEnvironment = env |> Environment.updatePerson newPerson
-              Success (newEnvironment, AIMove)
-
-  /// View buildings in the area and nearby locations by checking the World Map
-  let survey env = 
-      let (currentRoom, adjacentRooms, overlookRooms) = env.Map
-      printfn "Current Room: %s" currentRoom
-      printfn "Adjacent Rooms:"
-      adjacentRooms |> List.filter (fun (name, lockState) -> lockState <> Secret) |> List.iter (AdjacentRoom.getRoomStateStr >> printfn "%s")
-      overlookRooms |> function Some rs -> printfn "Overlook Rooms:"; rs |> List.iter (printfn "%s") | None -> ()
-      Success (env, AIWait)
-
-
-  /// Take an item from a person or container.
-  let takeFrom targetName itemName env =
-      let tryTakeSpecialItem item person = // 1 food, and 1 weapon are special cases for the person. Change the "IsHolding_" flags accordingly.
-          match item with
-          | Consumable _ -> {person with IsHoldingFood = false}
-          | Weapon _ -> {person with IsHoldingWeapon = false}
-          | _ -> person
-      match env.Room |> Room.tryFindPersonByName targetName with
-      | Some person ->
-          let takeItem item =
-              let newPerson = {person with Items = person.Items |> List.removeOne item} |> tryTakeSpecialItem item
-              let newPlayer = {env.Player with Items = item::env.Player.Items}
-              printfn "You took item %s from %s" (item |> Item.getName) (person.Info.Name)
-              env |> Environment.updatePerson newPerson |> Environment.updatePlayer newPlayer
-
-          match person |> Person.tryFindItemByName itemName with
-          | None -> Failure (sprintf "%s does not have the item %s" targetName itemName)
-          | Some item when person.State <> SNormal -> Success (takeItem item, AIMove)
-          | Some _ when person.Type = Guard -> Failure ("You cannot take items from guards when they are conscious")
-          | Some item when Person.queryTrust person > 2 -> Success (takeItem item, AIMove)
-          | Some _ -> Failure (sprintf "%s does not trust you enough to give you %s" targetName itemName)
-      | None -> 
-          match Room.tryFindItemByName targetName env.Room with
-          | None -> Failure (sprintf "%s is not a valid person or container to take items from" targetName)
-          | Some (Container (items,info)) ->
-              match items |> List.tryFind (Item.getName >> String.toLower >> (=) itemName) with
-              | None -> Failure (sprintf "The item %s does not contain %s" targetName itemName)
-              | Some containerItem -> 
-                  printfn "You took %s from %s" itemName targetName
-                  let newPlayer = {env.Player with Items = containerItem::env.Player.Items} // Add item to player inventory.
-                  let newContainer = Container (items |> List.removeOne containerItem, info) // Remove item from targetItem's inventory.
-                  let newEnvironment =
-                      env
-                      |> Environment.updateItems (List.replaceByWith (Item.getName >> String.toLower >> (=) targetName) newContainer)
-                      |> Environment.updatePlayer newPlayer
-                  Success (newEnvironment, AIMove)
-          | Some _ -> Failure (sprintf "The item %s cannot store any items" targetName)
-
-  /// Talk to a person to get information and increase trust.
-  let talk personName env =
-      match env |> Environment.tryFindPersonByName personName with
-      | None -> Failure.personFindFailure personName
-      | Some person ->
-          if person |> Person.queryTrust <= 2 then
-              printfn "%s does not trust you enough to talk to you" person.Info.Name
-              Success (env, AIMove)
-          else
-              match Person.stringToDataString Person.inquireInfo.[env.Rng.Next(0, (Person.inquireInfo |> List.length) - 1)] person with
-              | Failure f -> failwith f
-              | Success infoString ->
-                  printfn "%s gave you some information:" person.Info.Name
-                  printfn "%s" infoString
-                  if env.Rng.NextDouble() < person.Responsiveness then    // Each person has a parameter to limit the effects of "talking" with them.
-                      match person.Personality.Trust |> Personality.adjustTrust (Up 1) with
-                      | Failure f -> Failure (sprintf "%s" (person.Info.Name) + "'s " + f)
-                      | Success newTrust ->
-                          printfn "You increased %s's trust in you" person.Info.Name
-                          let newPerson = person |> Person.setTrust newTrust |> Person.trySetAwareness Aware
-                          let newEnvironment = env |> Environment.updatePerson newPerson
-                          Success (newEnvironment, AIMove)
-                  else Success (env, AIMove)
-
-  /// Teleport to a room. Will throw an exception if the room is not found in a file. Only used for debugging purposes.
-  let teleport roomName env =
-      let result = RoomIO.readFromFile roomName
-      match result with
-      | Failure f -> failwithf "%s" f
-      | Success (room,roomMap) ->
-          RoomIO.writeToFile (env.Room, env.Map)
-          let newEnvironment = {env with Room = room; Map = roomMap} |> Environment.addVisited roomName
-          Success (newEnvironment, AIWait)
-
-
-  /// Unequip a weapon and hides it from other people.
-  let unequip env =
-      match env.Player.EquippedItem with
-      | None -> Failure ("You do not have a weapon equipped")
-      | Some item ->
-          printfn "You unequipped %s" (item |> Item.getName)
-          let newPlayer = {env.Player with EquippedItem = None}
-          Success ({env with Player = newPlayer}, AIMove)
-      
-
-  /// Unlock an adjacent room if the player has the right key.
-  let unlock roomName env =
-      let (_,adjRooms,_) = env.Map
-      match adjRooms |> List.tryFind (fst >> String.toLower >> (=) roomName) with
-      | None -> Failure.roomFindFailure roomName
-      | Some (name,lockState) ->
-          match lockState with
-          | Unlocked | Secret -> Failure (sprintf "The door to %s is not locked" roomName)
-          | Locked code ->
-              let changeLockState roomName roomInfo : RoomInfo =
-                  let (room,map) = roomInfo
-                  let (cRoom,adjRooms,oRooms) = map
-                  let newAdjRoom = (roomName, Unlocked)
-                  let newAdjRooms = adjRooms |> List.replaceByWith (fst >> String.toLower >> (=) roomName) newAdjRoom
-                  room, (cRoom,newAdjRooms,oRooms)
-
-              // Unlock the target room for all rooms attached to the target room.
-              match RoomIO.readFromFile roomName with     // Worked first try!!!
-              | Failure f -> printfn "%s" f
-              | Success (loadedRoom,loadedRoomMap) ->
-                  let (cRoom,adjRooms,oRooms) = loadedRoomMap
-                  let otherRoomNames = adjRooms |> List.map fst |> List.filter ((<>) env.Room.Info.Name)
-                  otherRoomNames |> List.iter (fun n ->   // Loop through all other rooms connected to the target room and change the lock state.
-                      match RoomIO.readFromFile n with
-                      | Failure f -> printfn "%s" f
-                      | Success rInfo ->
-                          let newRInfo = changeLockState roomName rInfo
-                          RoomIO.writeToFile newRInfo)
-
-              if env.Player.Items |> List.containsBy (function | Key (keyCode,_) when code = keyCode -> true | _ -> false) then
-                  printfn "You unlocked %s" roomName
-                  let (_,map) = changeLockState roomName (env.Room,env.Map)
-                  Success ({env with Map = map}, AIMove)
-              else
-                  Failure (sprintf "The door could not be unlocked. You do not have a %O key" code)
-
-  /// View player's status and inventory.
-  let view arg env =
-      match arg with
-      | Inventory -> printfn "Items:"; env.Player.Items |> List.map Item.getNameWithType |> List.iter (printfn "%s"); Success (env, AIWait)
-      | Time -> printfn "Time: %s" (env.Time |> Time.asString); Success (env, AIWait)
-      | PersonStats personName ->
-          match env |> Environment.tryFindPersonByNameLower personName with
-          | None -> Failure (sprintf "%s is not a valid person in this room" personName)
-          | Some person ->
-              person |> Person.printStats
-              Success (env, AIWait)
-      | PlayerStats ->
-          env.Player |> Player.printStats
-          Success (env, AIWait)
-      | CompanionName ->
-          match env.Player.CompanionName with
-          | None -> Failure ("You do not have a companion")
-          | Some companionName -> printfn "Companion: %s" companionName; Success (env, AIWait)
-      | Objectives ->
-          env.Objectives |> List.map Objective.toString |> List.iter (printfn "%s"); Success (env, AIWait)
-      | VisitedRooms ->
-          env.VisitedRooms |> List.iter (printfn "%s"); Success (env, AIWait)
-              
-
-  /// Wait and allow the ai to take a turn.
-  let wait env =
-      printfn "You let the AI take a turn"
-      Success (env, AIMove)
+    function getNewLife() : RespawnData {
+      return { name: List.randomChoice(PeopleData.names), gender: PeopleData.getGenderByChance() };
+    }
+    function getResultStr(gA: Personality.Gender, gB: Personality.Gender) { return gA === gB ? "adopted" : "birthed"};
     
-*/
+
+    let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+    else {
+      if (personResult.value.getCreatedNewLife())
+        return Result.makeFailure("You have already created a new life with " + personResult.value.getName());
+      else {
+        if (env.getRoom().getPeople().filter(p => p.getState() === "SNormal").length > 1)
+          return Result.makeFailure("There are too many people around to do that");
+        else {
+          if (personResult.value.getAttraction().class === "Love") {
+            let newLife = getNewLife();
+            Std.writeLine(`You and ${personResult.value.getName()} ${getResultStr(env.getPlayer().getGender(), personResult.value.getGender())}`);
+            Std.writeLine(`new life added: ${newLife.name}, ${newLife.gender}`);
+            personResult.value.setCreatedNewLife(true);
+            env.addLife(newLife);
+            return Result.makeSuccess({ kind: "AIMove" });
+          } else {
+            if (personResult.value.getState() === "Dead")
+              return Result.makeFailure(`You perve, ${personResult.value.getName()} is dead!`);
+            else if (personResult.value.getState() === "SNormal") {
+              let damage = env.getPlayer().applyAngryAttack();
+              Std.writeLine(`${personResult.value.getName()} did not take kindly to that. ${personResult.value.getGenderPronounString} attacked you for ${damage} damage`);
+              personResult.value.setAttraction({ kind: "AttractionP", class: "Hate", value: 0 });
+              personResult.value.setCreatedNewLife(true);
+              env.applyBadActionToAll();
+              return Result.makeSuccess({ kind: "AIAlert", target: { kind: "TPlayer" } });
+            } else { // The person is asleep/unconscious/drunk so they do not resist. Affects nearby people though.
+              if (personResult.value.isCompatableWith(env.getPlayer().getGender())) {
+                let newLife = getNewLife();
+                Std.writeLine(`new life added: ${newLife.name}, ${newLife.gender}`);
+                personResult.value.setCreatedNewLife(true);
+                env.addLife(newLife);
+                env.applyBadActionToAll();
+                return Result.makeSuccess({ kind: "AIMove" });
+              }
+            }
+          }
+        }
+      }
+    }
+
+  }
+
+  // Save the game.
+  export function save(env: Environment) : Result.Result<AICall> {
+    Std.writeLine("You saved the game");
+    Std.writeEnv(env);
+    Std.writeRoom(env.getRoom(), env.getMap());
+    env.setStatus("Continue");
+    return Result.makeSuccess({ kind: "AIWait" });
+  }
+  
+  // Scout a distant area.
+  export function scout(roomName: string, env: Environment) : Result.Result<AICall> {
+    let oRoomsOpt = env.getMap().overlookRooms;
+    if (oRoomsOpt.rooms.kind === "None")
+      return Result.makeFailure("The current location does not have any scoutable locations");
+    else {
+      let roomNameOpt = List.tryFind(rN => rN.toLowerCase() === roomName, oRoomsOpt.rooms.value);
+      if (roomNameOpt.kind === "None")
+        return Result.makeFailure(roomName + " is not a scoutable location");
+      else {
+        let roomResult = Std.readRoom(roomName);
+        if (roomResult.kind === "Failure")
+          return roomResult;
+        else {
+          Std.writeLine("Scout:");
+          roomResult.value[0].getPeople().forEach(p => Std.writeLine(p.getName()));
+          return Result.makeSuccess({ kind: "AIWait" });
+        }
+      }
+    }
+  }
+
+  // Search for items and people in a location.
+  export function search(arg: CommandTypes.SearchArg, env: Environment) : Result.Result<AICall> {
+    if (arg.kind === "SearchArea") {
+      Std.writeLine("Items:");
+      env.getRoom().getItems().forEach((i: Item) => Std.writeLine(getNameWithType(i)));
+      Std.writeLine("People:");
+      env.getRoom().getPeople().sort((a: Person, b: Person) => {
+        if (a.getState() === "SNormal" && b.getState() !== "SNormal") return -1;
+        else if (a.getState() !== "SNormal" && b.getState() === "SNormal") return 1;
+        else return 0;
+    }).forEach(p => Std.writeLine(p.getFullInfoStr()));
+    return Result.makeSuccess({ kind: "AIWait" });
+  } else {
+    let itemResult = env.getRoom().tryFindItemByName(arg.itemName);
+    if (itemResult.kind === "None")
+      return Result.roomFindFailure(arg.itemName);
+    else {
+      if (itemResult.value.kind !== "Container") {
+        return Result.makeFailure(`The item ${arg.itemName} does not contain any items`);
+      } else if (itemResult.value.items.length === 0) {
+        Std.writeLine(arg.itemName + " is empty");
+        return Result.makeSuccess({ kind: "AIWait" });
+      } else {
+        Std.writeLine(arg.itemName + " Items:");
+        itemResult.value.items.forEach((i: Item) => Std.writeLine(getNameWithType(i)));
+        return Result.makeSuccess({ kind: "AIWait" });
+      }
+    }
+  }
 }
 
+  // Seduce a person. Large increase to attraction. Chance for failure.
+  export function seduce(personName: string, env: Environment) : Result.Result<AICall> {
+    let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+    else {
+      if (!personResult.value.getMoralityBasedChance()) {
+        Std.writeLine(`${personResult.value.getName()} did not take kindly to your advances. You lost all of ${personResult.value.getPossiveGenderString()} attraction and trust.`);
+        let damage = env.getPlayer().applyAngryAttack();
+        Std.writeLine(`${personResult.value.getName()} attacked you for ${damage} damage`);
+        personResult.value.setAttraction({ kind: "AttractionP", class: "Hate", value: 0 });
+        personResult.value.setTrust({ kind: "TrustP", class: "TMistrust", value: 0 });
+        personResult.value.trySetAwareness({ kind: "Aware" });
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else {
+        if (!personResult.value.isCompatableWith(env.getPlayer().getGender())) {
+          Std.writeLine(personResult.value.getName() + " does not swing your way");
+        } else {
+          Std.writeLine(personResult.value.getName() + " accepted your advances");
+          if (personResult.value.queryAttraction() === 10) 
+            Std.writeLine(`${personResult.value.getName()}'s attraction is already maxed out`);
+          else {
+            Std.writeLine(`You maxed out ${personResult.value.getName()}'s attraction and trust in you`);
+            personResult.value.setAttraction({ kind: "AttractionP", class: "Love", value: 10 });
+            personResult.value.setTrust({ kind: "TrustP", class: "TFull", value: 10 });
+          }
+          return Result.makeSuccess({ kind: "AIMove" });
+        }
+        personResult.value.setAwareness({ kind: "Aware" });
+        return Result.makeSuccess({ kind: "AIMove" });
+      }
+    }
+  }
+
+  // View buildings in the area and nearby locations by checking the World Map
+  export function survey(env: Environment) : Result.Result<AICall> {
+    let [currentRoom, adjacentRooms, overlookRooms] = [env.getMap().currentRoom, env.getMap().adjacentRooms, env.getMap().overlookRooms];
+    Std.writeLine("Current Room: " + currentRoom);
+    Std.writeLine("Adjacent Rooms:");
+    adjacentRooms.forEach((a: AdjacentRoom) => Std.writeLine(Room.getRoomStateStr(a)));
+    if (overlookRooms.rooms.kind === "Some") {
+      Std.writeLine("Overlook Rooms:");
+      overlookRooms.rooms.value.forEach(s => Std.writeLine(s));
+    }
+    return Result.makeSuccess({ kind: "AIWait" });
+  }
+
+  // Take an item from a person or container.
+  export function takeFrom(targetName: string, itemName: string, env: Environment) : Result.Result<AICall> {
+    function takeItem(item: Item, person: Person) {
+      if (item.kind === "Consumable")
+        person.setIsHoldingFood(false);
+      else if (item.kind === "Weapon")
+        person.setIsHoldingWeapon(false);
+      person.removeFromInventory(item.info.name);
+      env.getPlayer().addToInventory(item);
+      Std.writeLine(`You took item ${item.info.name} from ${person.getName()}`);
+    }
+
+    let personResult = env.tryFindPersonByName(targetName);
+    if (personResult.kind === "Some") { // Target is a person.
+      let itemResult = personResult.value.tryFindItemByName(itemName);
+      if (itemResult.kind === "None")
+        return Result.makeFailure(`${targetName} does not have the item ${itemName}`);
+      else {
+        if (personResult.value.getState() !== "SNormal" || personResult.value.queryTrust() > 2) {
+          takeItem(itemResult.value, personResult.value);
+          return Result.makeSuccess({ kind: "AIMove" });
+        } else if (personResult.value.getType() === "Guard") {
+          return Result.makeFailure("You cannot take items from guards when they are conscious");
+        } else {
+          return Result.makeFailure(`${targetName} does not trust you enough to give you ${itemName}`);
+        }
+      }
+    } else {
+      let containerResult = env.getRoom().tryFindItemByName(targetName);
+      if (containerResult.kind === "None")
+        return Result.makeFailure(`${targetName} is not a valid person or container to take items from`);
+      else if (containerResult.value.kind !== "Container")
+        return Result.makeFailure(`The item ${targetName} cannot store any items`);
+      else {
+        let itemOpt: Option.Option<Item> = List.tryFind((i: Item) => i.info.name.toLowerCase() === itemName, containerResult.value.items);
+        if (itemOpt.kind === "None")
+          return Result.makeFailure(`The item ${targetName} does not contain ${itemName}`);
+        else {
+          Std.writeLine(`You took ${itemName} from ${targetName}`);
+          env.getPlayer().addToInventory(itemOpt.value);
+          removeItem(containerResult.value, itemOpt.value);
+          return Result.makeSuccess({ kind: "AIMove" });
+        }
+      }
+    }
+
+  }
+
+  // Talk to a person to get information and increase trust.
+  export function talk(personName: string, env: Environment) : Result.Result<AICall> {
+    let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(personName);
+    if (personResult.kind === "None")
+      return Result.personFindFailure(personName);
+    else {
+      if (personResult.value.queryTrust() <= 2) {
+        Std.writeLine(personResult.value.getName() + " does not trust you enough to talk to you");
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else {
+        let inquireResult = personResult.value.stringToDataString(List.randomChoice(Person.inquireInfo));
+        if (inquireResult.kind === "Failure")
+          return inquireResult;
+        else {
+          Std.writeLine(`${personResult.value.getName()} gave you some information:`);
+          Std.writeLine(inquireResult.value);
+          if (Math.random() < personResult.value.getResponsiveness()) {
+            let adjResult = Personality.adjustTrust({ kind: "Up", value: 1 }, personResult.value.getTrust());
+            if (adjResult.kind === "Failure")
+              return Result.makeFailure(`${personResult.value.getName()}'s ${adjResult.value}`);
+            else {
+              Std.writeLine(`You increased ${personResult.value.getName()}'s trust in you`);
+              personResult.value.setTrust(adjResult.value);
+              personResult.value.setAwareness({ kind: "Aware" });
+              return Result.makeSuccess({ kind: "AIMove" });
+            }
+          } else {
+            return Result.makeSuccess({ kind: "AIMove" });
+          }
+        }
+      }
+    }
+  }
+  
+  // Teleport to a room. Will throw an exception if the room is not found in a file. Only used for debugging purposes.
+  export function teleport(roomName: string, env: Environment) : Result.Result<AICall> {
+    let roomResult = Std.readRoom(roomName);
+    if (roomResult.kind === "Failure")
+      return Result.makeFailure("Error " + roomResult.value);
+    else {
+      Std.writeRoom(env.getRoom(), env.getMap());
+      env.setRoom(roomResult.value[0]);
+      env.setMap(roomResult.value[1]);
+      env.addVisited(roomName);
+      return Result.makeSuccess({ kind: "AIWait" });
+    }
+  }
+  
+  // Unequip a weapon and hides it from other people.
+  export function unequip(env: Environment) : Result.Result<AICall> {
+    let item = env.getPlayer().getEquippedItem();
+    if (item.kind === "None")
+      return Result.makeFailure("You do not have a weapon equipped");
+    else {
+      Std.writeLine("You unequipped " + item.value.info.name);
+      env.getPlayer().unequipItem();
+      return Result.makeSuccess({ kind: "AIMove" });
+    }
+  }
+
+  // Unlock an adjacent room if the player has the right key.
+  export function unlock(roomName: string, env: Environment) : Result.Result<AICall> {
+    let adjRooms = env.getMap().adjacentRooms;
+    let roomResult = List.tryFind((a: AdjacentRoom) => a.name.toLowerCase() === roomName, adjRooms);
+    if (roomResult.kind === "None")
+      return Result.roomFindFailure(roomName);
+    else {
+      if (roomResult.value.lockState.kind === "Unlocked" || roomResult.value.lockState.kind === "Secret") {
+        return Result.makeFailure(`The door to ${roomName} is not locked`);
+      } else {
+
+        function changeLockState(roomName: string, roomInfo: [Room, RoomMap]) : [Room, RoomMap] {
+          let [room, map] = roomInfo;
+          let newAdjRoom: AdjacentRoom = { kind: "AdjacentRoom", name: roomName, lockState: { kind: "Unlocked" } };
+          let newAdjRooms = List.replaceByWith((p: AdjacentRoom) => p.name.toLowerCase() === roomName, newAdjRoom, map.adjacentRooms);
+          return [room, { kind: "RoomMap", currentRoom: map.currentRoom, adjacentRooms: newAdjRooms, overlookRooms: map.overlookRooms }];
+        }
+
+        // Check that the player has the correct key.
+        let code = roomResult.value.lockState.code;
+        if (List.countBy((i: Item) => i.kind === "Key" && i.doorCode === code, env.getPlayer().getItems()) >= 1) {
+          // Load the next room.
+          let loadedRoomResult = Std.readRoom(roomName);
+          if (loadedRoomResult.kind === "Failure")
+            return loadedRoomResult;
+          else {
+            // Unlock the access for all other rooms that lead to this room.
+            let otherRoomNames = List.map((a: AdjacentRoom) => a.name.toLowerCase(),loadedRoomResult.value[1].adjacentRooms).filter(s => s !== roomName);
+            otherRoomNames.forEach(name => {
+              let nameRoomResult = Std.readRoom(name);
+              if (nameRoomResult.kind === "Failure") {
+                Std.writeLine(nameRoomResult.value)
+              } else {
+                let newRInfo = changeLockState(roomName, nameRoomResult.value);
+                Std.writeRoom(newRInfo[0], newRInfo[1]);
+              }
+            })
+            return Result.makeSuccess({ kind: "AIMove" });
+          }
+        } else {
+          return Result.makeFailure(`The door could not be unlocked. You do not have a ${code} key`);
+        }
+        
+        
+      }
+    }
+  }
+
+  // View player's status and inventory.
+  export function view(arg: CommandTypes.ViewArg, env: Environment) : Result.Result<AICall> {
+    switch (arg.kind) {
+      case "Inventory": 
+        Std.writeLine("Items:"); 
+        List.map((i: Item) => getNameWithType(i), env.getPlayer().getItems()).forEach(s => Std.writeLine(s)); 
+        return Result.makeSuccess({ kind: "AIWait" });
+      case "Time": 
+        Std.writeLine(`Time: ${env.getTime().asString()}`);
+        return Result.makeSuccess({ kind: "AIWait" });
+      case "PersonStats":
+        let personResult: Option.Option<Person> = env.tryFindPersonByNameLower(arg.personName);
+        if (personResult.kind === "None")
+          return Result.personFindFailure(arg.personName);
+        else {
+          personResult.value.printStats()
+          return Result.makeSuccess({ kind: "AIWait" });
+        }
+
+      case "PlayerStats":
+        env.getPlayer().printStats();
+        return Result.makeSuccess({ kind: "AIWait" });
+      case "CompanionName":
+        let companion = env.getPlayer().getCompanion();
+        if (companion.kind === "None")
+          return Result.makeFailure("You do not have a companion");
+        else {
+          Std.writeLine("Companion: " + companion.value);
+          return Result.makeSuccess({ kind: "AIWait" });
+        }
+
+      case "Objectives":
+        Std.writeLine("Objecties:");
+        List.map((o: Objective.Objective) => Std.writeLine(Objective.toString(o)), env.getObjectives());
+        return Result.makeSuccess({ kind: "AIWait" });
+
+      case "VisitedRooms":
+        Std.writeLine("VisitedRooms: ");
+        env.getVisitedRooms().forEach(r => Std.writeLine(r));
+        return Result.makeSuccess({ kind: "AIWait" });
+    }
+  }
+
+  // Wait and allow the ai to take a turn.
+  export function wait(env: Environment) : Result.Result<AICall> {
+    Std.writeLine("You let the AI take a turn");
+    return Result.makeSuccess({ kind: "AIMove" });
+  }
+} 

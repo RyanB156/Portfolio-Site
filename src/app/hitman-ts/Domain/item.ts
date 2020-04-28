@@ -1,6 +1,7 @@
 
 import { Info } from './domain-types';
 import { Option } from './option';
+import { List } from './list';
 
 export type Visibility = "vlow" | "vmedium" | "vhigh"
 export type WeaponRange = "rshort" | "rmedium" | "rlong"
@@ -27,59 +28,62 @@ export type WeaponType = MeleeWeapon | RangedWeapon
 
 export type Item = Weapon | Key | Clue | HiddenPassageway | Consumable | Container | Display | Furniture | LargeDisplay | EscapeItem | Intel | Poison
 
+export namespace Init {
+  export function initMeleeWeapon(damage, kOChance, visibility, name, description) : Item {
+    return { kind: "Weapon", weaponType: { kind: "MeleeWeapon", damage: damage, visibility: visibility, koChance: kOChance, isPoisoned: false }, info: new Info(name, description) };
+  }
+          
+  export function initRangedWeapon(damage, visibility, ammoCount, name, description) : Item {
+    return { kind: "Weapon", weaponType: { kind: "RangedWeapon", damage: damage, visibility: visibility, ammoCount: ammoCount}, 
+      info: new Info(name, description) };
+  }
+  
+  export function initKey(code, name, description) : Item {
+    return { kind: "Key", doorCode: code, info: new Info(name, description) };
+  }
+  
+  export function initClue(name, description, clueInfo) : Item {
+    return { kind: "Clue", info: new Info(name, description), clueInfo: clueInfo };
+  }
+  
+  export function initHiddenPassageway(name, description, roomNames) : Item {
+    return { kind: "HiddenPassageway", info: new Info(name, description), rooms: roomNames };
+  }
+  
+  export function initConsumable(name, description, isAlcohol, healthBonus, uses) : Item {
+    return { kind: "Consumable", info: new Info(name, description), isAlcohol: isAlcohol, healthBonus: healthBonus, remainingUses: uses, isPoisoned: false }
+  }
+  
+  export function initContainer(name, description, items) : Item {
+    return { kind: "Container", info: new Info(name, description), items: items };
+  }
+  
+  export function initDisplay(name, description) : Item {
+    return { kind: "Display", info: new Info(name, description) };
+  }
+  
+  export function initEscape(name, description) : Item {
+    return { kind: "EscapeItem", info: new Info(name, description) };
+  }
+  
+  export function initLargeDisplay(name, description) : Item {
+    return { kind: "LargeDisplay", info: new Info(name, description) };
+  }
+      
+  export function initFurniture(name, description) : Item {
+    return { kind: "Furniture", info: new Info(name, description) };
+  }
+  
+  export function initIntel(name, description) : Item {
+    return { kind: "Intel", info: new Info(name, description) };
+  }
+  
+  export function initPoison(name, description) : Item {
+    return { kind: "Poison", info: new Info(name, description) };
+  }
+}
 
-export function initMeleeWeapon(damage, kOChance, visibility, name, description) : Item {
-  return { kind: "Weapon", weaponType: { kind: "MeleeWeapon", damage: damage, visibility: visibility, koChance: kOChance, isPoisoned: false }, info: new Info(name, description) };
-}
-        
-export function initRangedWeapon(damage, visibility, ammoCount, name, description) : Item {
-  return { kind: "Weapon", weaponType: { kind: "RangedWeapon", damage: damage, visibility: visibility, ammoCount: ammoCount}, 
-    info: new Info(name, description) };
-}
 
-export function initKey(code, name, description) {
-  return { kind: "Key", code: code, info: new Info(name, description) };
-}
-
-export function initClue(name, description, clueInfo) {
-  return { kind: "Clue", info: new Info(name, description), clueInfo: clueInfo };
-}
-
-export function initHiddenPassageway(name, description, roomNames) {
-  return { kind: "HiddenPassageway", info: new Info(name, description), rooms: roomNames };
-}
-
-export function initConsumable(name, description, isAlcohol, healthBonus, uses) {
-  return { kind: "Consumable", info: new Info(name, description), isAlcohol: isAlcohol, healthBonus: healthBonus, uses: uses }
-}
-
-export function initContainer(name, description, items) {
-  return { kind: "Container", info: new Info(name, description), items: items };
-}
-
-export function initDisplay(name, description) {
-  return { kind: "Display", info: new Info(name, description) };
-}
-
-export function initEscape(name, description) {
-  return { kind: "EscapeItem", info: new Info(name, description) };
-}
-
-export function initLargeDisplay(name, description) {
-  return { kind: "LargeDisplay", info: new Info(name, description) };
-}
-    
-export function initFurniture(name, description) {
-  return { kind: "Furniture", info: new Info(name, description) };
-}
-
-export function initIntel(name, description) {
-  return { kind: "Intel", info: new Info(name, description) };
-}
-
-export function initPoison(name, description) {
-  return { kind: "Poison", info: new Info(name, description) };
-}
 
     
 export function isClue(item) {
@@ -141,12 +145,14 @@ export function isHeavy(item: Item) : boolean {
 }
 
 export function getItems(item: Item) : Option.Option<Item[]> {
-  if (item.kind == "Container")
+  if (item.kind === "Container")
     return Option.makeSome(item.items);
   else
     return Option.makeNone();
 }
 
-export function fire(weapon: RangedWeapon, info: Info) : Item {
-  return initRangedWeapon(weapon.damage, weapon.visibility, weapon.ammoCount - 1, info.name, info.description);
+export function removeItem(item: Item, target: Item) {
+  if (item.kind === "Container") {
+    item.items = List.removeOne((i: Item) => i.info.name.toLowerCase() === target.info.name.toLowerCase(), item.items);
+  }
 }

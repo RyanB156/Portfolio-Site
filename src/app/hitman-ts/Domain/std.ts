@@ -1,5 +1,6 @@
 import { Room, RoomMap } from './room';
 import { Result } from './result';
+import { Environment } from './environment';
 
 
 
@@ -31,6 +32,14 @@ export class Std {
   }
 
   public static writeRoom(room: Room, map: RoomMap) {
+
+  }
+
+  public static readEnv(env: Environment) {
+    
+  }
+
+  public static writeEnv(env: Environment) {
 
   }
 
