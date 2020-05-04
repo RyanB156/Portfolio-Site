@@ -22,6 +22,8 @@ import { HitmanTSComponent } from './hitman-ts/hitman-ts.component';
 import { CmdComponent } from './cmd/cmd.component';
 import { HitmanNewGameComponent } from './hitman-new-game/hitman-new-game.component';
 
+import "reflect-metadata";
+
 @NgModule({
   declarations: [
     AppComponent,

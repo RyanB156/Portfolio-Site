@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewChild, ElementRef, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, ViewChild, ElementRef, Output, EventEmitter, Input } from '@angular/core';
 import { NewGameInfo, LoadGameInfo } from '../hitman-ts/Domain/domain-types';
 
 @Component({
@@ -9,8 +9,8 @@ import { NewGameInfo, LoadGameInfo } from '../hitman-ts/Domain/domain-types';
 export class HitmanNewGameComponent implements OnInit {
   @Output() onNewGame : EventEmitter<string[]> = new EventEmitter<string[]>();
   @Output() onLoadGame : EventEmitter<FileList> = new EventEmitter<FileList>();
+  @Input() showModal: boolean;
 
-  showModal: boolean = false; // TODO: Set this back to true...
   nameError: boolean = false;
   fileError: boolean = false;
   files: FileList;
@@ -25,7 +25,6 @@ export class HitmanNewGameComponent implements OnInit {
 
   closeModal() {
     this.showModal = false;
-    console.log("Gender: " + this.gender);
   }
 
   newGame() {
@@ -33,7 +32,6 @@ export class HitmanNewGameComponent implements OnInit {
       this.nameError = true;
     }
     else {
-      console.log(`Emitting ${this.name}, ${this.gender}`);
       this.onNewGame.emit([this.name, this.gender]);
       this.closeModal();
     }
@@ -44,7 +42,6 @@ export class HitmanNewGameComponent implements OnInit {
       this.fileError = true;
     }
     else {
-      console.log(`Emitting ${this.files}`);
       this.onLoadGame.emit(this.files);
       this.closeModal();
     }

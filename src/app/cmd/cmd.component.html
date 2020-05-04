@@ -7,6 +7,6 @@
     <label class="prompt-box" for="text-input">{{prompt}}</label>
     <input class="input-text" [(ngModel)]="input" id="text-input" type="text" aria-labelledby="prompt" 
     (keydown.arrowup)="this.upPress($event)" (keydown.arrowdown)="this.downPress($event)"
-    (keydown.enter)="this.enterPress($event)" (keyup.tab)="this.tabPress()" >
+    (keydown.enter)="this.enterPress($event)" (keydown.tab)="this.tabPress($event)" >
   </div>
 </div>

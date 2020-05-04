@@ -1,5 +1,13 @@
-<app-cmd prompt="Ryan Bressette $"></app-cmd>
-<app-hitman-new-game></app-hitman-new-game>
+<app-cmd [prompt]="promptString"></app-cmd>
+<app-hitman-new-game [showModal]="showModal"></app-hitman-new-game>
 <div>
-  <h4>Note: This is a work in progress. Come back later for the finished game.</h4>
+  <h5>Load a saved game at any time:</h5>
+  <input type="file" placeholder="savefile.json" accept=".json" (change)="getFiles($event)">
 </div>
+
+<accordion>
+  <panel title="About">
+    <p>A typescript version of the text-based hitman game I wrote with F# and C#.</p>
+    <p>It features a custom command prompt created as an Angular component with all of the functionality of the desktop version.</p>
+  </panel>
+</accordion>
