@@ -14,18 +14,18 @@ export namespace ItemData {
     let f = Init.initMeleeWeapon;
     let itemOptionsList = [
         
-        f(30, Option.makeNone(), "VMedium",  "Knife", "A knife"),
-        f(50, Option.makeSome(2), "VMedium",  "Shovel",  "A typical garden shovel"),
-        f(15, Option.makeNone(), "VLow",  "ScrewDriver",  "A well worn screwdriver"),
-        f(50, Option.makeSome(3), "VHigh",  "MetalPipe",  "A heavy piece of(pipe"),
-        f(10, Option.makeNone(), "VLow",  "Pen",  "A calligraphy pen"),
-        f(40, Option.makeNone(), "VMedium",  "Cleaver",  "A large butcher knife"),
-        f(5, Option.makeSome(10), "VLow",  "Mop",  "An old mop"),
-        f(25, Option.makeNone(), "VMedium",  "HedgeTrimmers",  "A set of(hedge trimmers. They look sharp"),
-        f(15, Option.makeNone(), "VLow",  "Pencil",  "A well sharpened writing utensil"),
-        f(60, Option.makeNone(), "VMedium",  "Katana",  "A traditional Japanese sword"),
-        f(45, Option.makeSome(4), "VMedium",  "Claymore",  "A large two handed sword"),
-        f(10, Option.makeSome(15), "VMedium",  "TVRemote",  "An everyday TV remote"),
+        f("Knife", "A knife", 30, Option.makeNone(), "vmedium", false),
+        f("Shovel", "A typical garden shovel", 50, Option.makeSome(2), "vmedium", false),
+        f("ScrewDriver", "A well worn screwdriver", 15, Option.makeNone(), "vlow", false),
+        f("MetalPipe", "A heavy piece of pipe", 50, Option.makeSome(3), "vhigh", false),
+        f("Pen", "A calligraphy pen", 10, Option.makeNone(), "vlow", false),
+        f("Cleaver", "A large butcher knife", 40, Option.makeNone(), "vmedium", false),
+        f("Mop", "An old mop", 5, Option.makeSome(10), "vlow", false),
+        f("HedgeTrimmers", "A set of hedge trimmers. They look sharp", 25, Option.makeNone(), "vmedium", false),
+        f("Pencil", "A well sharpened writing utensil", 15, Option.makeNone(), "vlow", false),
+        f( "Katana", "A traditional Japanese sword", 60, Option.makeNone(), "vmedium", false),
+        f("Claymore", "A large two handed sword", 45, Option.makeSome(4), "vmedium", false),
+        f( "TVRemote", "An everyday TV remote", 10, Option.makeSome(15), "vmedium", false),
 
         ]
     export function getItem() : Item { return List.randomChoice(itemOptionsList); }
@@ -36,14 +36,14 @@ export namespace ItemData {
     let f = Init.initRangedWeapon
     let itemOptionsList = [
         
-        f(100, "VHigh", 2, "Shotgun", "A trusty double barrelled shotgun"),
-        f(100, "VMedium", 1, "HarpoonGun", "A projectile weapon used for underwater fishing"),
-        f(15, "VLow", 20, "NailGun", "A seemingly harmless tool. In the right hands it can be a deadly weapon."),
-        f(30, "VMedium", 8, "1911", "An American classic"),
-        f(60, "VHigh", 30, "M4", "A standard issue military carbine"),
-        f(35, "VMedium", 30, "M4Suppressed", "The M4, you know and love, with a suppressor attached"),
-        f(30, "VMedium", 15, "P226", "A special forces pistol"),
-        f(20, "VLow", 15, "P226Suppressed", "The same pistol, but quieter"),
+        f("Shotgun", "A trusty double barrelled shotgun", 100, "vhigh", 2),
+        f("HarpoonGun", "A projectile weapon used for underwater fishing", 100, "vmedium", 1),
+        f("NailGun", "A seemingly harmless tool. In the right hands it can be a deadly weapon.", 15, "vlow", 20),
+        f("1911", "An American classic", 30, "vmedium", 8),
+        f("M4", "A standard issue military carbine", 60, "vhigh", 30),
+        f("M4Suppressed", "The M4, you know and love, with a suppressor attached", 35, "vmedium", 30),
+        f("P226", "A special forces pistol", 30, "vmedium", 15,),
+        f("P226Suppressed", "The same pistol, but quieter", 20, "vlow", 15),
 
         ]
       export function getItem() : Item { return List.randomChoice(itemOptionsList); }
@@ -52,11 +52,11 @@ export namespace ItemData {
   export namespace Key {
     
     // type DoorCode = Blue | Red | Green | White | Black
-    let blueKey = Init.initKey("blue", "BlueKey", "A BlueKey");
-    let redKey = Init.initKey("red", "RedKey", "A RedKey");
-    let greenKey = Init.initKey("green", "GreenKey", "A GreenKey");
-    let whiteKey = Init.initKey("white", "WhiteKey", "A WhiteKey");
-    let blackKey = Init.initKey("black", "BlackKey", "A BlackKey");
+    let blueKey = Init.initKey("BlueKey", "A BlueKey", "blue");
+    let redKey = Init.initKey("RedKey", "A RedKey", "red");
+    let greenKey = Init.initKey("GreenKey", "A GreenKey", "green");
+    let whiteKey = Init.initKey("WhiteKey", "A WhiteKey", "white");
+    let blackKey = Init.initKey("BlackKey", "A BlackKey", "black");
 
     export function getItem(roomType: RoomTypes.SpawnRoomType) {
       if (roomType.kind === "Spawn" || roomType.kind === "Storage")
@@ -67,8 +67,10 @@ export namespace ItemData {
         return greenKey;
       else if (roomType.kind === "PrivateRoom")
         return blackKey;
+      else if (roomType.kind === "EntranceWay")
+        return whiteKey;
       else {
-        Std.writeLine(`Failure generating key for RoomType: ${roomType}. ${roomType} cannot have keys`);
+        console.log(`Failure generating key for RoomType: ${JSON.stringify(roomType)}. ${JSON.stringify(roomType)} cannot have keys`);
         return null;
       }
     
@@ -139,18 +141,18 @@ export namespace ItemData {
 
     let itemOptionsList = [
 
-        f("Lillies", "A small display of(flowers on the patio table. They must have come from the Mother's garden."),
+        f("Lillies", "A small display of flowers on the patio table. They must have come from the Mother's garden."),
         f("FishPicture", "A family fishing picture. The father and son are struggling to hold a huge marlin for the picture."),
-        f("AfricaPicture", "A picture of(the father with a robed man in the desert"),
-        f("JunglePicture", "A picture of(the father with a rich looking man in a jungle somewhere"),
+        f("AfricaPicture", "A picture of the father with a robed man in the desert"),
+        f("JunglePicture", "A picture of the father with a rich looking man in a jungle somewhere"),
         f("SkiMagazine", "A magazine about skiing in the Swiss Alps. A skiier carving a corner is featured on the cover"),
         f("CallOfDestiny", "There is a futuristic man on the cover with a gun. This must be what the kids are playing nowadays."),
         f("ZStation5", "The latest game console"),
-        f("FatherPortrait", "A regal portrait of(the father. He is in some sort of(military dress uniform"),
-        f("MotherPortrait", "A portrait of(the mother. She's in a large ball gown"),
-        f("SonPortrait", "A portrait of(the son. He is in a nice tuxedo"),
-        f("DaughterPortrait", "She is a spitting image of(her mother"),
-        f("AfricanHistory", "A large book with a map of(Africa on the cover"),
+        f("FatherPortrait", "A regal portrait of the father. He is in some sort of military dress uniform"),
+        f("MotherPortrait", "A portrait of the mother. She's in a large ball gown"),
+        f("SonPortrait", "A portrait of the son. He is in a nice tuxedo"),
+        f("DaughterPortrait", "She is a spitting image of her mother"),
+        f("AfricanHistory", "A large book with a map of Africa on the cover"),
 
         ]
     export function getItem() : Item { return List.randomChoice(itemOptionsList); }
@@ -395,11 +397,15 @@ export namespace ItemData {
     }
     // Add default items to the room.
     itemNames.concat(defaultItems(roomType));
+    //console.log(`Item names: ${JSON.stringify(itemNames)}`);
     // Try to convert some items into food if it makes sense for the room.
     itemNames = tryPrioritizeFood(prioritizeFood, itemNames);
+    //console.log(`Item names after prioritizing food: ${JSON.stringify(itemNames)}`);
     // Select random items that correspond to each type name.
     let items: Item[] = List.map((s: string) => stringClassToItem(roomType, s), itemNames);
+    //console.log(`Items: ${JSON.stringify(itemNames)}`);
     items = tryAddHiddenPassageway(roomType, items);
+    //console.log(`Items after adding hidden passageways: ${JSON.stringify(items)}`);
     items = List.distinctBy((i: Item) => i.info.name.toLowerCase(), items);
     return items;
   }

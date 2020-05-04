@@ -1,6 +1,6 @@
 
 import { Person, AIAction, APickupItem, AICall } from './person';
-import { Item, fire, RangedWeapon } from './item';
+import { Item, RangedWeapon } from './item';
 import { List } from './list';
 import { Environment } from './environment';
 import { Target } from './person';
@@ -9,12 +9,13 @@ import { Option } from './option';
 import { Result } from './result';
 import { Room, AdjacentRoom } from './room';
 import { RoomMap } from './room';
+import { WorldLoading } from './world-loading';
 
 
 export namespace AI {
 
   // The person attacks its target. First, find the person's weapon and use the weapon's damage. Then, apply the damage to the target.
-  export function attack(ai: Person, target: Target, env: Environment) {
+  export function attack(ai: Person, target: Target, env: Environment) : void {
     
     let damage = Person.defaultDamage;
 
@@ -27,7 +28,7 @@ export namespace AI {
           let rangedWeapon: RangedWeapon = result.value.weaponType;
           // If the weapon will still have ammo left after firing, leave it in the inventory.
           if (rangedWeapon.ammoCount > 1) {
-            result.value = fire(rangedWeapon, result.value.info);
+            result.value.weaponType.ammoCount--;
           } else { // Else remove the weapon.
             ai.removeFromInventory(result.value.info.name);
           }
@@ -52,7 +53,7 @@ export namespace AI {
         personResult.value.takeDamage(damage, Option.makeSome(10)); // HOPEFULLY THIS IS A REFERENCE THAT MODIFIES THE PERSON!!! FINGERS CROSSED!!!
         personResult.value.attackResponse({ kind: "TPerson", name: ai.getName() }); // Person responds to the ai attacking them.
         if (personResult.value.getState() === "Dead") {
-          ai.setAwareness("Aware");
+          ai.setAwareness({ kind: "Aware" });
           env.checkPersonObjectives(personResult.value); // Check if the killed ai was a target objective.
         }
         ai.setIsCommanded(false);
@@ -65,7 +66,7 @@ export namespace AI {
     
   }
 
-  export function useFood(ai: Person, env: Environment) {
+  export function useFood(ai: Person, env: Environment) : void {
     let resultItem: Option.Option<Item> = List.tryFind((i: Item) => i.kind === "Consumable", ai.getItems());
     if (resultItem.kind === "None")
       Std.writeLine("AI consume food error for " + ai.getName());
@@ -73,6 +74,7 @@ export namespace AI {
       let food: Item = resultItem.value;
       if (food.kind === "Consumable") {
         Std.writeLine(`${ai.getName()} consumed some of ${food.info.name}`);
+        Std.writeLine(`Health: ${ai.getHealth()}`);
         ai.addHealth(food.healthBonus); // Increase health by consuming something.
         if (food.isPoisoned)
           ai.setIsPoisoned(true);
@@ -92,9 +94,9 @@ export namespace AI {
     }
   }
 
-  export function goto(ai: Person, roomName: string, env: Environment) {
+  export function goto(ai: Person, roomName: string, env: Environment) : void {
     
-    let result: Result.Result<[Room, RoomMap]> = Std.readRoom(roomName);
+    let result: Result.Result<[Room, RoomMap]> = WorldLoading.readRoom(roomName);
     if (result.kind === "Failure")
       Std.writeLine("AI goto failure: " + result.value);
     else {
@@ -104,7 +106,7 @@ export namespace AI {
       let nextRoomMap: RoomMap = result.value[1];
       nextRoom.addPerson(ai);
 
-      Std.writeRoom(nextRoom, nextRoomMap);
+      WorldLoading.writeRoom(nextRoom, nextRoomMap);
 
       Std.writeLine(`${ai.getName()} moved to ${nextRoom.getName()}`);
       env.getRoom().removePerson(ai);
@@ -118,22 +120,23 @@ export namespace AI {
     }
   }
 
-  export function tryWakeUp(ai: Person, env: Environment) {
+  export function tryWakeUp(ai: Person, env: Environment) : void {
     if (Math.random() < 0.10) {
       Std.writeLine(`${ai.getName()} regained consciousness`);
       ai.setState("SNormal");
     }
   }
 
-  export function pickupItem(ai: Person, itemName: string, env: Environment) {
-    let itemOption: Option.Option<Item> = env.getRoom().tryFindItemByName(itemName);
+  export function pickupItem(ai: Person, itemName: string, env: Environment) : void {
+    let itemOption: Option.Option<Item> = env.getRoom().tryFindItemByName(itemName.toLowerCase());
     if (itemOption.kind === "None")
       Std.writeLine(`Internal Error: \"pickupItem\" for ${ai.getName()}. Cannot find item ${itemName}`);
     else {
       ai.setIsCommanded(false);
+      Std.writeLine(`${ai.getName()} picked up ${itemName}`);
+      env.getRoom().removeItem(itemOption.value);
       if (itemOption.value.kind === "Consumable") {
         if (!ai.getIsHoldingFood()) {
-          Std.writeLine(`${ai.getName()} picked up ${itemName}`);
           ai.setIsHoldingFood(true);
           ai.addToInventory(itemOption.value);
         } else {
@@ -141,7 +144,6 @@ export namespace AI {
         }
       } else if (itemOption.value.kind === "Weapon") {
         if (!ai.getIsHoldingWeapon()) {
-          Std.writeLine(`${ai.getName()} picked up ${itemName}`);
           ai.setIsHoldingWeapon(true);
           ai.addToInventory(itemOption.value);
         } else {
@@ -153,7 +155,7 @@ export namespace AI {
     }
   }
 
-  export function commitSuicide(ai: Person, env: Environment) {
+  export function commitSuicide(ai: Person, env: Environment) : void {
     Std.writeLine(`${ai.getName()} commited suicide`);
     ai.setState("Dead");
     ai.setHealth(0);
@@ -166,27 +168,27 @@ export namespace AI {
 
     let action = ai.getAction();
     let actionKind = ai.getAction().kind;
-      if (actionKind === "AAttack") {
-        let target = null;
-        let awareness = ai.getAwareness();
-        if (awareness.kind === "Hostile") {
-          target = awareness.target;
-        } else {
-          target = { kind: "NoTarget" };
-        }
-        attack(ai, target, env);
-      } else if (actionKind === "AUseFood") {
-        useFood(ai, env);
-      } else if (action.kind === "AGoto") {
-        goto(ai, action.room, env);
-      } else if (actionKind === "ATryWakeUp") {
-        tryWakeUp(ai, env);
-      } else if (action.kind === "APickupItem") {
-        pickupItem(ai, action.item, env);
-      } else if (actionKind === "ASuicide") {
-        commitSuicide(ai, env);
-      } 
-    }
+    if (actionKind === "AAttack") {
+      let target = null;
+      let awareness = ai.getAwareness();
+      if (awareness.kind === "Hostile") {
+        target = awareness.target;
+      } else {
+        target = { kind: "NoTarget" };
+      }
+      attack(ai, target, env);
+    } else if (actionKind === "AUseFood") {
+      console.log(`${ai.getName()} using food`);
+      useFood(ai, env);
+    } else if (action.kind === "AGoto") {
+      goto(ai, action.room, env);
+    } else if (actionKind === "ATryWakeUp") {
+      tryWakeUp(ai, env);
+    } else if (action.kind === "APickupItem") {
+      pickupItem(ai, action.item, env);
+    } else if (actionKind === "ASuicide") {
+      commitSuicide(ai, env);
+    } 
   }
 
   export function decideAction(env: Environment, person: Person) : AIAction {
@@ -196,6 +198,7 @@ export namespace AI {
       } else {
         let state = person.getState();
         if (state === "Dead" || state === "Asleep" || state === "Unconscious") {
+
           // Remove the player's companion if the companion is incapacitated.
           let playerCompanionOption = env.getPlayer().getCompanion();
           if (playerCompanionOption.kind === "Some" && playerCompanionOption.value.toLowerCase() === person.getName().toLowerCase()) {
@@ -208,11 +211,9 @@ export namespace AI {
           else
             return { kind: "ANeutralAction" };
 
-        } else if (person.getHealth() <= 50) {
-          if (person.getIsHoldingFood()) {
+        } else if (person.getHealth() <= 50 && person.getIsHoldingFood()) {
             return { kind: "AUseFood" };
-          }
-          else {
+        } else {
             let foodItemOption: Option.Option<Item> = List.tryFind((i: Item) => i.kind === "Consumable", env.getRoom().getItems());
             if (foodItemOption.kind === "Some") 
               return { kind: "APickupItem", item: foodItemOption.value.info.name };
@@ -224,95 +225,109 @@ export namespace AI {
                 return { kind: "ANeutralAction" };
               }
             }
-          }
-        } else {
-          return { kind: "ANeutralAction" };
-        }
+          } // End Pickup check.
+        } // End state check.
       }
-
-    } else {
+    else {
       return person.getAction();
     }
   }
-
-
-  export function aiAction(env: Environment, callType: AICall) {
-    
-    function aiMove(env: Environment, person: Person) {
-
-      // Dead people cannot take actions.
-      if (person.getState() === "Dead")
-        return;
-      let action: AIAction = decideAction(env, person);
-      person.setAction(action);
-      person.tryApplyPoisonDamage();
-      if (person.getState() === "Dead") // If poison killed the person check if an objective was completed.
-        env.checkPersonObjectives(person);
-    }
-
-    function updateAwareness(alertPerson: Target, person: Person) {
-      if (person.getState() === "SNormal") {
-        let awareness = null;
-        if (person.getType() === "Guard" || person.getBravery() === "BBrave") {
-          awareness = { kind: "Hostile", target: alertPerson };
-        }
-        else if (person.getBravery() === "BFearful") {
-          awareness = { kind: "Afraid"};
-          person.addFear({ kind: "Up", value: 1} );
-        } else {
-          awareness = { kind: "Aware" };
-        }
-        if (person.getAwareness() !== awareness)
-          Std.writeLine(`${person.getName()} is ${awareness}`);
-        person.setAwareness(awareness);
-      }
-    }
-
-    function aiAlert(alertPerson: Target, env: Environment, person: Person) {
+  
+  
+    export function aiAction(env: Environment, callType: AICall) {
       
-      // Cannot alert a dead person.
-      if (person.getState() === "Dead")
-        return;
+      function aiMove(env: Environment, person: Person) {
+  
+        console.log(`Making ${person.getName()} move`);
 
-      updateAwareness(alertPerson, person);
-      // Remove the player's disguise because they were detected.
-      if (alertPerson.kind === "TPlayer" && env.getPlayer().getDisguise().kind === "Some")
-        env.getPlayer().setDisguise(Option.makeNone());
-    }
-
-    function aiAlertAdjacentRooms(alertPerson: Target, env: Environment) {
-
-      // Search all adjacent rooms.
-      env.getMap().adjacentRooms.forEach((ar: AdjacentRoom) => {
-        let readResult = Std.readRoom(ar.name); // Read all adjacent rooms to alert the people inside.
-        if (readResult.kind === "Failure")
-          Std.writeLine(readResult.value);
-        else {
-          let loadedRoom: Room = readResult.value[0];
-          let loadedRoomMap: RoomMap = readResult.value[1];
-          // Only show the name of the room if there are new people to alert.
-          if (List.countBy((p: Person) => p.getAwareness().kind === "Unaware" || p.getAwareness().kind === "Warn", loadedRoom.getPeople()) > 0)
-            Std.writeLine(`-${loadedRoom.getName()}:`);
-          // Update the awareness of all people in the adjacent room.
-          loadedRoom.getPeople().forEach((p: Person) => {
-            updateAwareness(alertPerson, p);
-          });
-          Std.writeRoom(loadedRoom, loadedRoomMap);
+        person.tryApplyPoisonDamage();
+        // Dead people cannot take actions.
+        if (person.getState() === "Dead") {
+          env.checkPersonObjectives(person);
+          return;
         }
-      })
+
+        if (!person.getIsCommanded()) {
+          let action: AIAction = decideAction(env, person);
+          person.setAction(action);
+        }
+
+        takeAction(env, person); // Have the AI carry out its option.
+          
+      }
+  
+      function updateAwareness(alertPerson: Target, person: Person) {
+        if (person.getState() === "SNormal") {
+          let awareness = null;
+          if (person.getType() === "Guard" || person.getBravery() === "BBrave") {
+            awareness = { kind: "Hostile", target: alertPerson };
+          }
+          else if (person.getBravery() === "BFearful") {
+            awareness = { kind: "Afraid"};
+            person.addFear({ kind: "Up", value: 1} );
+          } else {
+            awareness = { kind: "Aware" };
+          }
+          if (person.getAwareness() !== awareness) {
+            person.setAwareness(awareness);
+            Std.writeLine(`${person.getName()} is ${person.getAwarenessAsString()}`);
+          }
+        }
+      }
+  
+      function aiAlert(alertPerson: Target, env: Environment, person: Person) {
+        
+        // Cannot alert a dead person.
+        if (person.getState() === "Dead")
+          return;
+  
+        // Wake up sleeping people.
+        if (person.getState() === "Asleep")
+          person.setState("SNormal");
+
+        updateAwareness(alertPerson, person);
+        // Remove the player's disguise because they were detected.
+        if (alertPerson.kind === "TPlayer" && env.getPlayer().getDisguise().kind === "Some")
+          env.getPlayer().setDisguise(Option.makeNone());
+      }
+  
+      function aiAlertAdjacentRooms(alertPerson: Target, env: Environment) {
+  
+        // Search all adjacent rooms.
+        env.getMap().adjacentRooms.forEach((ar: AdjacentRoom) => {
+          let readResult = WorldLoading.readRoom(ar.name); // Read all adjacent rooms to alert the people inside.
+          if (readResult.kind === "Failure")
+            Std.writeLine(readResult.value);
+          else {
+            let loadedRoom: Room = readResult.value[0];
+            let loadedRoomMap: RoomMap = readResult.value[1];
+            // Only show the name of the room if there are new people to alert.
+            if (List.countBy((p: Person) => p.getAwareness().kind === "Unaware" || p.getAwareness().kind === "Warn", loadedRoom.getPeople()) > 0)
+              Std.writeLine(`-${loadedRoom.getName()}:`);
+            // Update the awareness of all people in the adjacent room.
+            loadedRoom.getPeople().forEach((p: Person) => {
+              updateAwareness(alertPerson, p);
+            });
+            WorldLoading.writeRoom(loadedRoom, loadedRoomMap);
+          }
+        })
+      }
+  
+    // Decide which actions to apply based on the call type.
+
+    console.log("Received AICall " + JSON.stringify(callType));
+  
+    if (callType.kind === "AIMove") { // Move the ai without alerting.
+      env.getRoom().getPeople().forEach((p: Person) => aiMove(env, p));
+    } else if (callType.kind === "AIAlert" || callType.kind === "AIAlertAll") { // Move the ai and alert the ones in the room and optionally all in the adjacent rooms.
+      env.getRoom().getPeople().forEach((p: Person) => {
+        aiAlert(callType.target, env, p);
+        aiMove(env, p);
+      });
+      if (callType.kind === "AIAlertAll")
+        aiAlertAdjacentRooms(callType.target, env);
     }
-
-  // Decide which actions to apply based on the call type.
-
-  if (callType.kind === "AIMove") { // Move the ai without alerting.
-    env.getRoom().getPeople().forEach((p: Person) => aiMove(env, p));
-  } else if (callType.kind === "AIAlert" || callType.kind === "AIAlertAll") { // Move the ai and alert the ones in the room and optionally all in the adjacent rooms.
-    env.getRoom().getPeople().forEach((p: Person) => {
-      aiAlert(callType.target, env, p);
-      aiMove(env, p);
-    });
-    if (callType.kind === "AIAlertAll")
-      aiAlertAdjacentRooms(callType.target, env);
+  
   }
 
-}
+  }

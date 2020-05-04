@@ -1,4 +1,3 @@
-import { Info } from './domain-types';
 import { Option } from './option';
 import { Item, getNameWithType } from './item';
 import { Personality } from './personality';
@@ -6,12 +5,25 @@ import { List } from './list';
 import { Random } from './random';
 import { Result } from './result';
 import { Std } from 'src/app/hitman-ts/Domain/std';
+import { Info } from './info';
 
 
 export type PersonType = "Player" | "Barkeep" | "Chef" | "Groundskeeper" | "Janitor" | "Maid" | "Civilian" | "Guard" | "Target"
 export type RespawnData = { name: string, gender: Personality.Gender }
 
+export function respawnDataString(data: RespawnData) : string { return `(${data.name}, ${data.gender})`; }
+
 export type State = "SNormal" | "Asleep" | "Unconscious" | "Dead" | "Drunk"
+
+export interface TPerson { kind: "TPerson"; name: string }
+export interface TPlayer { kind: "TPlayer" }
+export interface NoTarget { kind: "NoTarget" }
+export type Target = TPerson | TPlayer | NoTarget
+
+export function targetAsString(target: Target) : string {
+  if (target.kind === "TPerson")
+    return `TPerson(${target.name})`;
+}
 
 export interface Hostile { kind: "Hostile"; target: Target }
 export interface Unaware { kind: "Unaware" }
@@ -21,6 +33,13 @@ export interface Warn { kind: "Warn" }
 
 export type Awareness = Unaware | Aware | Afraid | Hostile | Warn
 
+export function awarenessAsString(awareness: Awareness) : string {
+  if (awareness.kind === "Hostile")
+    return `Hostile(${targetAsString(awareness.target)})`;
+  else
+    return awareness.kind;
+}
+
 export interface APickupItem { kind: "APickupItem"; item: string }
 export interface AGoto { kind: "AGoto"; room: string }
 export interface AAttack { kind: "AAttack" }
@@ -29,11 +48,6 @@ export interface AUseFood { kind: "AUseFood" }
 export interface ATryWakeUp { kind: "ATryWakeUp" }
 export interface ANeutralAction { kind: "ANeutralAction" }
 export type AIAction = AAttack | ASuicide | AUseFood | APickupItem | AGoto | ATryWakeUp | ANeutralAction
-
-export interface TPerson { kind: "TPerson"; name: string }
-export interface TPlayer { kind: "TPlayer" }
-export interface NoTarget { kind: "NoTarget" }
-export type Target = TPerson | TPlayer | NoTarget
 
 // Wait: AI is not triggered. Move: AI is triggered. Alert: AI is triggered and alerted to the player's presence. 
 // AlertAll: AI is triggered and all people in the room and adjacent rooms are alerted to the player's presence.
@@ -74,9 +88,10 @@ export class Person {
   private createdNewLife: boolean;
   private responsiveness: number;
 
-  constructor(name, description, personType, gender, sexuality, bravery, ethics, morality, responsivenes) {
+  constructor(info: Info, personType: PersonType, gender: Personality.Gender, sexuality: Personality.Sexuality, 
+    bravery: Personality.Bravery, ethics: Personality.Ethics, morality: Personality.Morality, responsivenes: number) {
     
-    this.info = new Info(name, description);
+    this.info = info;
     this.clueInfo = "";
     this.type = personType;
     this.gender = gender;
@@ -96,7 +111,9 @@ export class Person {
     this.responsiveness = responsivenes;
   }
 
-  addClue(clue) { this.clueInfo = clue; }
+  setItems(items: Item[]) { this.items = items; }
+
+  setClue(clue) { this.clueInfo = clue; }
 
   initStandingGuard() { this.awareness = { kind: "Warn" }; }
   
@@ -139,8 +156,18 @@ export class Person {
   getIsCommanded() { return this.isCommanded; }
   setIsCommanded(b) { this.isCommanded = b; }
 
+  setAttackDamage(damage: number) { this.attackDamage = damage; }
+
   getIsPoisoned() { return this.isPoisoned; }
-  setIsPoisoned(b) { this.isPoisoned = b; }  
+  setIsPoisoned(b, print=false) { 
+    if (print) {
+      if (b)
+      Std.writeLine(`${this.info.name} is poisoned`);
+    else
+      Std.writeLine(`${this.info.name} has been cured of ${this.getGenderPronounString} poisoning`);
+    }
+    this.isPoisoned = b; 
+  }  
 
   getBravery() { return this.personality.bravery; }
 
@@ -166,7 +193,7 @@ export class Person {
     Std.writeLine("Sexuality: " + this.sexuality);
     Std.writeLine("State: " + this.state);
     Std.writeLine("Health: " + this.health);
-    Std.writeLine("Awareness: " + this.awareness);
+    Std.writeLine("Awareness: " + this.getAwarenessAsString());
     Std.writeLine("Bravery: " + this.personality.bravery);
     Std.writeLine("Morality: " + this.personality.morality);
     Std.writeLine("Ethics: " + this.personality.ethics);
@@ -193,12 +220,12 @@ export class Person {
 
   adjustChanceWithStats(chance) {
     let weights = [ Person.fearWeight * this.personality.fear.value, Person.moodWeight * this.personality.mood.value, Person.trustWeight * this.personality.trust.value ]
-    return List.foldNumber((x, y) => x + y, weights, chance);
+    return List.fold((x: number, y: number) => x + y, chance, weights);
   }
 
   adjustChanceFixed() {
     let weights = [ Person.fearWeight * this.personality.fear.value, Person.moodWeight * this.personality.mood.value, Person.trustWeight * this.personality.trust.value ]
-    return List.reduceNumber((x, y) => x + y, weights);
+    return List.reduce((x, y) => x + y, weights);
   }
 
   // Random chance for a person's response based on their ethics.
@@ -256,7 +283,7 @@ export class Person {
 
   // Get all search info about a person.
   getFullInfoStr() {
-    return `Name:${this.info.name} - Gender:${this.gender} - Type:${this.type} - State:${this.state} - Awareness:${this.awareness}`;
+    return `Name:${this.info.name} - Gender:${this.gender} - Type:${this.type} - State:${this.state} - Awareness:${this.getAwarenessAsString()}`;
   }
 
   getJobClothes() {
@@ -282,8 +309,8 @@ export class Person {
       return `${this.info.name} does not trust you enough to give you any information`;
   }
 
-  stringToDataString(arg) : Result.Result<string>{
-    function inner(a) {
+  stringToDataString = (arg) : Result.Result<string> => {
+    let inner = (a) => {
       switch (a) {
         case "name": return "Name: " + this.info.name;
         case "description": return "Description: " + this.info.description;
@@ -302,7 +329,7 @@ export class Person {
         case "clue": return this.clueInfo;
         case "items": 
           let itemNames = List.map((i: Item) => getNameWithType(i), this.items);
-          return `${this.info.name} items:\n${List.foldString((a, b) => a + b, itemNames, "")}`;
+          return `${this.info.name} items:\n${List.fold((a, b) => a + b, "", itemNames)}`;
         default: return "Error in stringToDataString.inner";
       }
     }
@@ -327,7 +354,7 @@ export class Person {
   tryFindItem(item) { return List.tryFind((i) => i === item, this.items); }
 
   // Finds the item in the person's inventory by checking its name in lower case.
-  tryFindItemByName(itemName) { return List.tryFind((i: Item) => i.info.name === itemName, this.items); }
+  tryFindItemByName(itemName) { return List.tryFind((i: Item) => i.info.name.toLowerCase() === itemName.toLowerCase(), this.items); }
 
   // Update the specified person's awareness level with the given value.
   updateAwareness(newLevel) { this.awareness = newLevel; }
@@ -360,21 +387,21 @@ export class Person {
       case "MRed": adj = { kind: "Up", value: 1 }; responseMsg = `${this.info.name} liked that`;
     }
 
-    function adjAttraction(adj) {
+    let adjAttraction = (adj) => {
       let result = Personality.adjustAttraction(adj, this.personality.attraction);
-      if (result.kind === "Failure") Result.printPersonalityAdjFailure(this, result.value);
+      if (result.kind === "Failure") Std.writeLine(Result.printPersonalityAdjFailureStr(this, result));
       else this.setAttraction(result.value);
     }
 
-    function adjTrust(adj) {
+    let adjTrust = (adj) => {
       let result = Personality.adjustTrust(adj, this.personality.trust);
-      if (result.kind === "Failure") Result.printPersonalityAdjFailure(this, result.value);
+      if (result.kind === "Failure") Std.writeLine(Result.printPersonalityAdjFailureStr(this, result));
       else this.setTrust(result.value);
     }
 
-    function adjMood(adj) {
+    let adjMood = (adj) => {
       let result = Personality.adjustMood(adj, this.personality.mood);
-      if (result.kind === "Failure") Result.printPersonalityAdjFailure(this, result.value);
+      if (result.kind === "Failure") Std.writeLine(Result.printPersonalityAdjFailureStr(this, result));
       else this.setMood(result.value);
     }
 
@@ -408,7 +435,7 @@ export class Person {
   tryApplyPoisonDamage() {
     if (this.state !== "Dead") {
       if (this.isPoisoned) {
-        Std.writeLine(`${this.info.name} took damage from poison. Health: ${Person.defaultPoisonDamage}`);
+        Std.writeLine(`${this.info.name} took damage from poison. Health: ${this.health}`);
         this.health -= Person.defaultPoisonDamage;
         this.deathCheck();
       }

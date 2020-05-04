@@ -1,4 +1,3 @@
-import { Info } from './domain-types';
 import { PersonType, Person } from './person';
 import { Personality } from './personality';
 import { Option } from './option';
@@ -6,6 +5,7 @@ import { Item } from './item';
 import { Random } from './random';
 import { List } from './list';
 import { Std } from 'src/app/hitman-ts/Domain/std';
+import { Info } from './info';
 
 export class Player {
   private info: Info;
@@ -17,8 +17,8 @@ export class Player {
   private items: Item[];
   private equippedItem: Option.Option<Item>;
 
-  constructor(info:Info, gender:Personality.Gender, target:Option.Option<string>, disguise:Option.Option<PersonType>, 
-    name:Option.Option<string>, health:number, items:Item[], equippeditem:Option.Option<Item>) {
+  constructor(info: Info, gender: Personality.Gender, target: Option.Option<string>, disguise: Option.Option<PersonType>, 
+    name: Option.Option<string>, health: number, items: Item[], equippeditem: Option.Option<Item>) {
     
     this.info = info;
     this.gender = gender;
@@ -28,6 +28,10 @@ export class Player {
     this.health = health;
     this.items = items;
     this.equippedItem = equippeditem;
+  }
+
+  toString() : string {
+    return `name: ${this.info.name}, description: ${this.info.description}, gender: ${this.gender}, target: ${Option.optionToString(this.closeTarget)}`
   }
 
   initPlayer(name, description, gender, items) {
@@ -58,7 +62,7 @@ export class Player {
   removeFromInventory(item: Item) { this.items = List.removeOne((i: Item) => i.info.name.toLowerCase() === item.info.name.toLowerCase(), this.items); }
 
   getCloseTarget() { return this.closeTarget; }
-  setCloseTarget(target) { this.closeTarget = target; }
+  setCloseTarget(target: Option.Option<string>) { this.closeTarget = target; }
 
   setGender(newGender) { this.gender = newGender; }
   getGender() { return this.gender; }

@@ -1,29 +1,30 @@
 import { Player } from './player'
-import { Room, RoomMap, AdjacentRoom } from './room';
-import { GameStatus, Accolades } from './domain-types';
+import { Room, RoomMap, AdjacentRoom, roomMapToString } from './room';
+import { GameStatus, Accolades, accoladesString } from './domain-types';
 import { Time } from './time';
 import { Objective } from './objective';
-import { Person, RespawnData } from './person';
+import { Person, RespawnData, respawnDataString } from './person';
 import { Item } from './item';
 import { List } from './list';
 import { Std } from 'src/app/hitman-ts/Domain/std';
 
-
 export class Environment {
 
   private player: Player;
-  private room: Room;
-  private roomMap: RoomMap;
-  private time: Time;
-  private gameStatus: GameStatus;
-  private extraLives: RespawnData[];
-  private updatePeople: Person[];
-  private objectives: Objective.Objective[];
-  private accolades: Accolades;
-  private moveCount: number;
-  private visitedRooms: string[];
+  private room:  Room;
+  private roomMap:  RoomMap;
+  private time:  Time
+  private gameStatus:  GameStatus
+  private extraLives:  RespawnData[]
+  private updatePeople:  Person[]
+  private objectives:  Objective.Objective[]
+  private accolades:  Accolades
+  private moveCount:  number
+  private visitedRooms:  string[]
+  
 
-  constructor(player, room, map, time, gameStatus, extraLives, updatePeople, objectives, accolades, moveCount, visitedRooms) {
+  constructor(player: Player, room: Room, map: RoomMap, time: Time, gameStatus: GameStatus, extraLives: RespawnData[], 
+    updatePeople: Person[], objectives: Objective.Objective[], accolades: Accolades, moveCount: number, visitedRooms: string[]) {
     this.player = player;
     this.room = room;
     this.roomMap = map;
@@ -37,6 +38,13 @@ export class Environment {
     this.visitedRooms = visitedRooms;
   }
 
+  toString() : string {
+    return `env: { \n\tplayer: ${JSON.stringify(this.player)}, \n\troom: ${JSON.stringify(this.room)}, \n\tmap: ${JSON.stringify(this.roomMap)}, \n\ttime: ${this.time.asString()}, ` +
+      `\n\tstatus: ${this.gameStatus}, \n\textraLives: ${JSON.stringify(this.extraLives)}, \n\tupdatePeople: ${JSON.stringify(this.updatePeople)}, ` +
+      `\n\tobjectives: ${JSON.stringify(this.objectives)}, \n\taccolades: ${accoladesString(this.accolades)}, \n\tmoveCount: ${this.moveCount}, ` + 
+      `\n\tvisitedRooms: ${JSON.stringify(this.visitedRooms)} \n\t}`;
+  }
+
   getPlayer() { return this.player; }
   getRoom() { return this.room; }
   getTime() { return this.time; }
@@ -46,6 +54,7 @@ export class Environment {
   getAccolades() { return this.accolades; }
   getMoveCount() { return this.moveCount; }
   getStatus() { return this.gameStatus; }
+  getExtraLives() { return this.extraLives; }
   setStatus(status: GameStatus) { this.gameStatus = status; }
 
   getUpdatePeople() { return this.updatePeople; }
@@ -124,6 +133,9 @@ export class Environment {
     this.objectives = List.map((o: Objective.Objective) => {
       if (o.kind === "CollectIntel" && o.name === item.info.name) {
         Std.writeLine(`You completed an Objective: CollectIntel-${o.name}`);
+        if (List.forAll((o: Objective.Objective) => o.completed, this.getObjectives())) {
+          Std.writeLine("\n\n***** You have completed all of the objectives. Escape! *****\n\n");
+        }
         return { kind: "CollectIntel", completed: true, name: o.name };
       }
       else
@@ -137,6 +149,9 @@ export class Environment {
     this.objectives = List.map((o: Objective.Objective) => {
       if (o.kind === "Kill" && o.name === killedPerson.getName()) {
         Std.writeLine(`You completed an Objective: Kill-${o.name}`);
+        if (List.forAll((o: Objective.Objective) => o.completed, this.getObjectives())) {
+          Std.writeLine("\n\n***** You have completed all of the objectives. Escape! *****\n\n");
+        }
         return { kind: "Kill", completed: true, name: o.name, targetState: "Eliminated" };
       }
       else

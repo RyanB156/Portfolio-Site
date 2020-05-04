@@ -3,8 +3,8 @@ import { List } from './list';
 import { Random } from './random';
 import { Option } from './option';
 import { PeopleData } from './people-data';
-import { Info } from './domain-types';
 import { ItemData } from './item-data';
+import { Info } from './info';
 
 export namespace RoomData {
   
@@ -12,9 +12,9 @@ export namespace RoomData {
 
   // Weight w 1-5 for each room type. Create a list where each type is repeated w times, then a random choice 
   // from the entire list will take each weight into account by simple probability.
-  function roomChanceWeights() : RoomTypes.SpawnRoomType[] {
+  export function roomChanceWeights() : RoomTypes.SpawnRoomType[] {
     let roomWeights: [RoomTypes.SpawnRoomType, number][] = [
-      [ { kind: "Patio" } , 2],
+      [{ kind: "Patio" } , 2],
       [{ kind: "Garden" }, 3], 
       [{ kind: "Garage" }, 2], 
       [{ kind: "Storage" }, 1],
@@ -35,7 +35,7 @@ export namespace RoomData {
 
   }
   
-  function getConnectionLimit(roomType: RoomTypes.SpawnRoomType) : number {
+  export function getConnectionLimit(roomType: RoomTypes.SpawnRoomType) : number {
     switch(roomType.kind) {
       // Outide
       case "Spawn": return Random.nextInt(2, 4) // 2-3 connections.
@@ -213,7 +213,7 @@ export namespace RoomData {
       ]
 
   // Generate all of the information for each room. Calls for the creation of all people and items to be put in a room.
-  function spawnRoomNameDesc(spawnRoomType: RoomTypes.SpawnRoomType) : [[string, string], RoomTypes.SpawnRoomType] {
+  export function spawnRoomNameDesc(spawnRoomType: RoomTypes.SpawnRoomType) : [[string, string], RoomTypes.SpawnRoomType] {
     function roomChoice() {
       switch (spawnRoomType.kind) {
         case "Spawn": return Spawn.roomOptionsList
@@ -246,7 +246,7 @@ export namespace RoomData {
     let prioritizeFood = foodRooms.includes(name);
     let items = ItemData.spawnItems(roomType, prioritizeFood);
 
-    let room = new Room(people, info, items, roomType);
+    let room = new Room(info, roomType, people, items);
     return [[room, initMap(name, [], [])], roomType];
   }
   

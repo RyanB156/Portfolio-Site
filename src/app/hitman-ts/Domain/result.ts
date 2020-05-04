@@ -48,13 +48,9 @@ export namespace Result {
     return { kind: "Failure", value: `${roomName} is not a nearby location` };
   }
 
-  // Print failure based on trying to adjust a person's mood/trust/attraction.
-  export function printPersonalityAdjFailure (person:Person, failureMsg) {
-    Std.writeLine(`${person.getInfo()}'s ${failureMsg}`);
-  }
-
-  export function printPersonalityAdjFailureStr (person:Person, failureMsg) {
-    return `${person.getInfo()}'s ${failureMsg}`;
+  // Create failure based on trying to adjust a person's mood/trust/attraction.
+  export function printPersonalityAdjFailureStr (person:Person, failure: Failure) {
+    return `${person.getName()}'s ${failure.value}`;
   }  
 
 }

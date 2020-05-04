@@ -58,6 +58,7 @@ export namespace CommandTypes {
   export interface Inspect { kind: "Inspect", itemName: string }
   export interface Intimidate { kind: "Intimidate", personName: string }
   export interface LeaveMe { kind: "LeaveMe" }
+  export interface Load { kind: "Load" }
   export interface Peek { kind: "Peek", roomName: string }
   export interface Pickup { kind: "Pickup", itemName: string }
   export interface Place { kind: "Place", containerName: string, itemName: string } // place an item in a Container or other item with storage.

@@ -14,7 +14,7 @@ export namespace SpawnRoom {
   let closetLockChance = 0.10
   
   // export interface SpawnRoom { kind: "SpawnRoom"; type: RoomTypes.SpawnRoomType; connections: number; maxConnections: number}
-  export function initSpawnRoom(roomType, connectionF) : SpawnRoom {
+  export function initSpawnRoom(roomType, connectionF: (t: RoomTypes.SpawnRoomType) => number) : SpawnRoom {
     return { kind: "SpawnRoom", type:roomType, connections: 0, maxConnections: connectionF(roomType) };
   }
 
@@ -36,7 +36,7 @@ export namespace SpawnRoom {
   }
 
   // Checks if a room has reached its maximum number of connections.
-  export function isMaxxedOut(rc: RoomConnect) {
+  export function isMaxedOut(rc: RoomConnect) {
     return rc.spawnRoom.connections >= rc.spawnRoom.maxConnections;
   }
     

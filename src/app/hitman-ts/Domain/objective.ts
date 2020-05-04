@@ -6,6 +6,14 @@ export namespace Objective {
   export interface CollectIntel { kind: "CollectIntel"; completed: boolean; name: string }
   export type Objective = Kill | CollectIntel
 
+  export function makeKill(completed: boolean, name: string, targetState: TargetState) {
+    return { kind: "Kill", completed: completed, name: name, targetState: targetState };
+  }
+
+  export function makeCollectIntel(completed: boolean, name: string) {
+    return { kind: "CollectIntel", completed: completed, name: name };
+  }
+
 
   export function getInfoStr(obj: Objective) {
     if (obj.kind === "Kill")

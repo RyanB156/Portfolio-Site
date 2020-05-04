@@ -1,9 +1,9 @@
 import { Person } from './person';
-import { Info } from './domain-types';
-import { Item, DoorCode } from './item';
+import { Item, DoorCode, itemToString } from './item';
 import { Option } from './option';
 import { List } from './list';
 import { SpawnRoom } from './spawn-room';
+import { Info } from './info';
 
 
 export namespace RoomTypes {
@@ -39,10 +39,24 @@ export namespace RoomTypes {
 }
 
 export interface AdjacentRoom { kind: "AdjacentRoom"; name: string; lockState: LockState }
+export function adjacentRoomToString(room: AdjacentRoom) : string {
+  return `adjacentRoom: { name: ${room.name}, lockState: ${lockStateToString(room.lockState)} }`;
+}
 export interface OverlookRooms { kind: "OverlookRooms"; rooms: Option.Option<string[]> }
 
-export interface RoomMap { kind: "RoomMap"; currentRoom: string; adjacentRooms: AdjacentRoom[]; overlookRooms: OverlookRooms}
-export interface RoomConnect { kind: "RoomConnect"; room: Room; roomMap: RoomMap; spawnRoom: SpawnRoom}
+export interface RoomMap { kind: "RoomMap"; currentRoom: string; adjacentRooms: AdjacentRoom[]; overlookRooms: OverlookRooms }
+export interface RoomConnect { kind: "RoomConnect"; room: Room; roomMap: RoomMap; spawnRoom: SpawnRoom }
+
+export function roomMapToString(map: RoomMap) : string {
+  function overlookRoomString() {
+    if (map.overlookRooms.rooms.kind === "None")
+      return "";
+    else
+      return List.fold((s: string, t: string) => s + " " + t, "", map.overlookRooms.rooms.value);
+  }
+  return `roomMap: { currentRoom: ${map.currentRoom}, adjacentRooms: ${List.fold((s, r: AdjacentRoom) => s + " " + adjacentRoomToString(r), "", map.adjacentRooms)}, ` +
+  `overlookRooms: ${overlookRoomString()}`;
+}
 
 export interface RoomInfo { kind: "RoomInfo"; room: Room; roomMap: RoomMap }
 
@@ -51,18 +65,30 @@ export interface Secret { kind: "Secret" }
 export interface Unlocked { kind: "Unlocked" }
 export type LockState = Unlocked | Secret | Locked
 
+export function lockStateToString(lockState: LockState) : string {
+  if (lockState.kind === "Locked")
+    return "Locked " + lockState.code;
+  else
+    return lockState.kind;
+}
+
 
 export class Room {
-  private people: Person[];
   private info: Info;
-  private items: Item[];
   private roomType: RoomTypes.SpawnRoomType;
+  private people: Person[];
+  private items: Item[];
 
-  constructor(people: Person[], info: Info, items: Item[], roomType: RoomTypes.SpawnRoomType) {
-    this.people = people;
+  constructor(info: Info, roomType: RoomTypes.SpawnRoomType, people: Person[], items: Item[]) {
     this.info = info;
-    this.items = items;
     this.roomType = roomType;
+    this.people = people;
+    this.items = items;
+  }
+
+  toString() : string {
+    return `people: { ${List.arrayToString((p: Person) => p.toString(), this.people)}, name: ${this.info.name}, description: ${this.info.description}, ` +
+    `items: { ${List.arrayToString((i: Item) => itemToString(i), this.items)} }, roomType: ${this.roomType.kind}`;
   }
 
   static getRoomStateStr(room: AdjacentRoom) {
@@ -80,6 +106,11 @@ export class Room {
   getItems() { return this.items; }
 
   setItems(items) { this.items = items; }
+
+  removeItem(item: Item) {
+    console.log("Removing " + item.info.name + " from the room " + this.info.name);
+    this.items = List.removeOne((i: Item) => i.info.name.toLowerCase() === item.info.name.toLowerCase(), this.items);
+  }
 
   updateItems(f: (i: Item) => Item) {
     this.items = List.map(f, this.items);

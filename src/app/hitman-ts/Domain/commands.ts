@@ -8,13 +8,14 @@ import { Personality } from './personality';
 import { Environment } from './environment';
 import { Item, getNameWithType, isHeavy, removeItem } from './item';
 import { CommandTypes } from './command-types';
-import { AdjacentRoom, Room, RoomMap } from './room';
+import { AdjacentRoom, Room, RoomMap, lockStateToString } from './room';
 import { Objective } from './objective';
 import { PeopleData } from './people-data';
+import { WorldLoading } from './world-loading';
 
 export namespace Commands {
 
-  const commandList = new Map<string, string>([
+  export const commandList = new Map<string, string>([
     ["amuse", "amuse <person> - tell a joke to lift a person's spirits, it may backfire"],
     ["apply", "apply <poisonName> to <itemName> - poison a weapon or consumable item"],
     ["approach", "approach <person> - get in close quarters to a person, giving them a chance to react. Required for melee attacks"],
@@ -22,7 +23,7 @@ export namespace Commands {
     ["capture", "capture <person> - capture a terrified person to get an extra life. Only \"Fearful\" people can be made terrified."],
     ["cheerup", "cheerup <person> - increase a person's happiness"],
     ["chokeout", "chokeout <person> - render a person unconscious"],
-    ["command", "command <person> <pickup/goto/attack/stop> <target> - command an ai to take an action"],
+    ["command", "command <person> <pickup/goto/attack/stop/killyourself> <target> - command an ai to take an action"],
     ["compliment", "complement <person> - give a complement to increase happiness and attraction"],
     ["consume", "consume <item> - eat or drink an item to regain health"],
     ["describe", "describe <area/item/person> <_/itemName/personName> - display the description for <area/item/person>"],
@@ -40,6 +41,7 @@ export namespace Commands {
     ["inspect", "inspect <clue> - reveal information about a clue"],
     ["intimidate", "intimidate <person> - Intimidate a person to make them afraid of you. Lower there resistance to your influence."],
     ["leaveme", "leaveme <person> - Causes a person to stop following you"],
+    ["load", "load<> - load a saved game"],
     ["peek", "peek <room> - reveal items and people in an adjacent room"],
     ["pickup", "pickup <item> - add item in the area to inventory"],
     ["place", "place <item> in <item> - place an item into another item if possible"],
@@ -62,22 +64,29 @@ export namespace Commands {
   export let aiCommandList = [ "pickup", "attack", "goto", "stop", "killyourself" ];
 
   // Creates a list of the elements in a list that match a given pattern in ascending order.
-  function getSuggestions(matchStrings: string[], pattern: string) : [number, string][] {
+  export function getSuggestions(matchStrings: string[], pattern: string, minVal: number) : [number, string][] {
     let matchedPairs: [number, string][] = [];
     matchStrings.forEach((s: string) => {
       matchedPairs.push([List.stringDiff(s, pattern), s]);
     });
-    return matchedPairs.sort((a, b) => {
+    matchedPairs = matchedPairs.sort((a, b) => {
       if (a > b) return -1;
       else if (a < b) return 1;
       else return 0;
-    });
+    }).filter(p => p[0] >= minVal);
+
+    if (matchedPairs.length > 0) {
+      let highestMatch = matchedPairs[0][0];
+      return matchedPairs.filter(p => p[0] === highestMatch);
+    } else {
+      return [];
+    }
   }
 
   // Get a list of suggestions for the specified command.
   export function getCmdSuggestions(command: string, minVal: number) {
     // Use the list of commands from the help dictionary as the list of available commands.
-    let suggestions = getSuggestions(Array.from(commandList.keys()), command);
+    let suggestions = getSuggestions(Array.from(commandList.keys()), command, 1);
     return suggestions.filter(pair => pair[0] >= minVal);
   }
 
@@ -86,7 +95,7 @@ export namespace Commands {
     let suggestions = getCmdSuggestions(str, minVal);
     let suggestionString = "";
     if (suggestions.length > 0) {
-      Std.writeLine("Did you mean... :");
+      str = "Did you mean... :" + str;
       suggestions.forEach(e => str + " " + (e[1].toUpperCase()));
     }
     return suggestionString;
@@ -104,10 +113,10 @@ export function amuse(personName, env) : Result.Result<AICall> {
       let [adjStr, adj]: [string, Personality.Adjustment] = Random.nextInt(0, 4) === 0 ? ["lowered", { kind: "Down", value: 4 }] : ["raised", { kind: "Up", value: 2}];
       
       if (Math.random() < personResult.value.getResponsiveness()) {
-        Std.writeLine(`You ${adjStr} ${personResult.value.getName()}'s spirits`);
+        Std.writeLine(`That ${adjStr} ${personResult.value.getName()}'s spirits`);
         let adjustResult = Personality.adjustMood(adj, personResult.value.getMood());
         if (adjustResult.kind === "Failure")
-          return Result.makeFailure(Result.printPersonalityAdjFailureStr(personResult.value, adjustResult.value));
+          return Result.makeFailure(Result.printPersonalityAdjFailureStr(personResult.value, adjustResult));
         else {
           personResult.value.setMood(adjustResult.value);
           personResult.value.trySetAwareness({ kind: "Aware" });
@@ -176,7 +185,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
       return Result.personFindFailure(personName);
     else {
       Std.writeLine(`You approached ${personResult.value.getName()}`);
-      env.getPlayer().setCloseTarget(personResult.value);
+      env.getPlayer().setCloseTarget(Option.makeSome(personResult.value.getName().toLowerCase()));
       return Result.makeSuccess({ kind: "AIMove" });
     }
   }
@@ -184,8 +193,11 @@ export function amuse(personName, env) : Result.Result<AICall> {
   // Attack the specified person with the equipped weapon.
   export function attack(personName: string, env: Environment) {
     let personResult = env.tryFindPersonByNameLower(personName);
-    if (personResult.kind === "None")
+    if (personResult.kind === "None") {
       return Result.personFindFailure(personName);
+    } else if (personResult.value.getState() === "Dead") {
+      return Result.makeFailure(`You cannot attack ${personResult.value.getName()}. ${personResult.value.getGenderPronounString()} is already dead`);
+    }
     else {
       let equippedItemResult = env.getPlayer().getEquippedItem();
       if (equippedItemResult.kind === "None")
@@ -201,7 +213,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
               let mWeapon = equippedItemResult.value.weaponType;
               personResult.value.applyAttack(mWeapon.damage, mWeapon.koChance, mWeapon.isPoisoned);
               Std.writeLine(`You melee attacked ${personResult.value.getName()} with ${equippedItemResult.value.info.name} for ${mWeapon.damage} damage`);
-              Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwareness()}`);
+              Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwarenessAsString()}`);
               env.applyBadActionToAll(); // Modify mood and trust values of people in the room.
               if (personResult.value.getState() === "Dead") {
                 env.checkPersonObjectives(personResult.value); // Check if the killed person was a target.
@@ -225,7 +237,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
           else {
             personResult.value.applyAttack(rWeapon.damage, Option.makeNone(), false);
             Std.writeLine(`You shot ${personResult.value.getName()} with ${equippedItemResult.value.info.name} for ${rWeapon.damage} damage`);
-            Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwareness()}`);
+            Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwarenessAsString()}`);
             rWeapon.ammoCount--;
             env.applyBadActionToAll();
             if (personResult.value.getState() === "Dead") {
@@ -284,7 +296,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
         if (Math.random() < personResult.value.getResponsiveness()) {
           let moodResult = Personality.adjustMood({ kind: "Up", value: 2 }, personResult.value.getMood());
           if (moodResult.kind === "Failure")
-            return Result.makeFailure(Result.printPersonalityAdjFailureStr(personResult.value, moodResult.value));
+            return Result.makeFailure(Result.printPersonalityAdjFailureStr(personResult.value, moodResult));
           else {
             Std.writeLine(`You lifted ${personResult.value.getName()}'s spirits`);
             personResult.value.setMood(moodResult.value);
@@ -334,8 +346,11 @@ export function amuse(personName, env) : Result.Result<AICall> {
     if (personResult.kind === "None")
       return Result.personFindFailure(personName);
     else {
-      if (!personResult.value.isCompliant() || personResult.value.getState() === "Dead") {
+      if (!personResult.value.isCompliant()) {
         Std.writeLine(`${personResult.value.getName()} will not take orders from you`);
+        return Result.makeSuccess({ kind: "AIMove" });
+      } else if (personResult.value.getState() === "Dead") {
+        Std.writeLine(`${personResult.value.getName()} is dead`);
         return Result.makeSuccess({ kind: "AIMove" });
       } else {
         switch (command.kind) {
@@ -396,28 +411,34 @@ export function amuse(personName, env) : Result.Result<AICall> {
       return Result.makeFailure(`${personResult.value.getName()} is dead`);
     } else {
       if (Math.random() < personResult.value.getResponsiveness()) {
+
         // Try to increase the person's attraction towards the player.
         if (personResult.value.isCompatableWith(env.getPlayer().getGender())) {
           let attractionResult: Result.Result<Personality.AttractionP> = Personality.adjustAttraction({ kind: "Up", value: 2 }, personResult.value.getAttraction());
           if (attractionResult.kind === "Failure")
-            Result.printPersonalityAdjFailure(personResult.value, attractionResult);
+            Std.writeLine(Result.printPersonalityAdjFailureStr(personResult.value, attractionResult));
           else {
             Std.writeLine(`You increased ${personResult.value.getName()}'s attraction towards you`)
             personResult.value.setAttraction(attractionResult.value);
+            return Result.makeSuccess({ kind: "AIMove" });
           }
         } else {
           Std.writeLine(`${personResult.value.getName()} does not swing your way`);
+          return Result.makeSuccess({ kind: "AIMove" });
         }
+
         // Try to increase the person's mood.
         let moodResult: Result.Result<Personality.MoodP> = Personality.adjustMood({ kind: "Up", value: 2 }, personResult.value.getMood());
         if (moodResult.kind === "Failure")
-          Result.printPersonalityAdjFailure(personResult.value, moodResult);
+          return Result.makeFailure(Result.printPersonalityAdjFailureStr(personResult.value, moodResult));
         else {
           Std.writeLine(`You lifted ${personResult.value.getName()}'s spirits`);
           personResult.value.setMood(moodResult.value);
+          return Result.makeSuccess({ kind: "AIMove" });
         }
       } else {
         Std.writeLine(`${personResult.value.getName()} did not respond to your compliment`);
+        return Result.makeSuccess({ kind: "AIMove" });
       }
     }
   }
@@ -553,9 +574,11 @@ export function amuse(personName, env) : Result.Result<AICall> {
         if (totalObjs === finishedObjs) {
           env.setStatus("Win");
           Std.writeLine(`You have completed all objectives and escaped using ${itemResult.value.info.name}`);
+          return Result.makeSuccess({ kind: "AIWait" });
         } else {
           env.setStatus("PartialWin");
           Std.writeLine(`You have completed only ${finishedObjs}/${totalObjs}`);
+          return Result.makeSuccess({ kind: "AIWait" });
         }
       } else {
         return Result.makeFailure(`${itemResult.value.info.name} is not an escape route`);
@@ -582,6 +605,8 @@ export function amuse(personName, env) : Result.Result<AICall> {
     let personResult = env.tryFindPersonByName(personName);
     if (personResult.kind === "None")
       return Result.personFindFailure(personName);
+    else if (personResult.value.getState() === "Dead")
+      return Result.makeFailure(`${personResult.value.getName()} is dead`);
     else if (personResult.value.getType() === "Guard") 
       return Result.makeFailure(`${personResult.value.getName()} will not be your companion`);
     else {
@@ -608,6 +633,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
           person.addItem(item);
           person.addTrust({ kind: "Up", value: 4 });
           person.setAction({ kind: "AUseFood" });
+          person.setIsCommanded(true);
           return true;
         } else {
           Std.writeLine(`${person.getName()} is already holding a consumable item`);
@@ -659,7 +685,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
       function takeCompanion(tempEnv: Environment) {
         let companionOption = tempEnv.getPlayer().getCompanion();
         if (companionOption.kind === "None") {
-          Std.writeRoom(tempEnv.getRoom(), tempEnv.getMap());
+          WorldLoading.writeRoom(tempEnv.getRoom(), tempEnv.getMap());
           Std.writeLine(`Moved to ${roomName}`);
           tempEnv.setRoom(loadedRoom);
           tempEnv.setMap(map);
@@ -672,7 +698,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
             Std.writeLine(`Moved to ${roomName} with ${personResult.value.getName()}`);
             let newPrevRoom = tempEnv.getRoom();
             newPrevRoom.removePerson(personResult.value);
-            Std.writeRoom(newPrevRoom, tempEnv.getMap());
+            WorldLoading.writeRoom(newPrevRoom, tempEnv.getMap());
             loadedRoom.addPerson(personResult.value);
             tempEnv.setRoom(loadedRoom);
             tempEnv.setMap(map);
@@ -721,11 +747,11 @@ export function amuse(personName, env) : Result.Result<AICall> {
     // No option -> display nearby rooms.
     if (arg.kind === "None") {
       // Only display rooms that are not secret.
-      adjacentRooms.filter(a => !a.lockState).sort((a, b) => {
+      adjacentRooms.filter(a => a.lockState.kind !== "Secret").sort((a, b) => {
         if (!a.lockState && b.lockState) return -1;
         else if (a.lockState && !b.lockState) return 1;
         else return 0;
-      }).forEach(a => Std.writeLine(`${a.name} - ${a.lockState}`));
+      }).forEach(a => Std.writeLine(`${a.name} - ${lockStateToString(a.lockState)}`));
       return Result.makeSuccess({ kind: "AIWait" }); // Viewing nearby rooms does not trigger the ai.
     } else { // Option -> Try to move to the specified room.
 
@@ -736,7 +762,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
         let roomOpt = List.tryFind((a: AdjacentRoom) => a.name.toLowerCase() === arg.value, adjacentRooms);
 
         function successF() : Result.Result<AICall> {
-          let roomResult = Std.readRoom(roomName);
+          let roomResult = WorldLoading.readRoom(roomName);
           if (roomResult.kind === "Failure")
             return roomResult;
           else {
@@ -771,12 +797,14 @@ export function amuse(personName, env) : Result.Result<AICall> {
   // Display list of possible commands.
   export function help(arg: CommandTypes.OptionArg) : Result.Result<AICall> {
     if (arg.kind === "None") {
-      commandList.forEach((v, k, m) => Std.writeLine(k + ": " + v));
+      let str = "";
+      commandList.forEach((v, k, m) => str += k + ": " + v + "\n");
+      Std.writeLine(str);
       return Result.makeSuccess({ kind: "AIWait" });
     } else {
       let cmdDescription = commandList.get(arg.value);
       if (cmdDescription === undefined || cmdDescription === null) {
-        return Result.makeFailure(`The command ${arg.value} is not listed under HELP\n` + printSuggestion(arg.value, 4));
+        return Result.makeFailure(`The command ${arg.value} is not listed under HELP\n` + printSuggestions(arg.value, 4));
       } else {
         Std.writeLine(cmdDescription);
         return Result.makeSuccess({ kind: "AIWait" });
@@ -834,7 +862,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
       switch (person.getBravery()) {
         case "BNeutral": return [3, true];
         case "BNeutral": return [1, true];
-        case "BBrave": return [0, false];
+        default: return [0, false];
       }      
     }
 
@@ -888,7 +916,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
     let adjRooms = env.getMap().adjacentRooms;
     let adjRoomNames = List.map((a: AdjacentRoom) => a.name.toLowerCase(), adjRooms);
     if (adjRoomNames.includes(arg)) {
-      let roomResult = Std.readRoom(arg);
+      let roomResult = WorldLoading.readRoom(arg);
       if (roomResult.kind === "Success") {
         Std.writeLine("Items:");
         roomResult.value[0].getItems().forEach(i => Std.writeLine(getNameWithType(i)));
@@ -912,6 +940,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
       return Result.makeFailure(`The item ${itemName} is too heavy to pick up`);
     } else {
       Std.writeLine("You picked up " + itemName);
+      env.getRoom().removeItem(itemResult.value);
       env.getPlayer().addToInventory(itemResult.value);
       env.checkItemObjectives(itemResult.value);
       return Result.makeSuccess({ kind: "AIMove" });
@@ -929,6 +958,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
         return Result.inventoryItemFindFailure(itemName);
       else if (targetResult.value.kind === "Container" ){
         Std.writeLine(`You put ${itemName} in ${targetName}`);
+        targetResult.value.items.push(itemResult.value);
         env.getPlayer().removeFromInventory(itemResult.value);
         env.getPlayer().removeEquippedItemCheck(itemResult.value);
         return Result.makeSuccess({ kind: "AIMove" });
@@ -949,11 +979,13 @@ export function amuse(personName, env) : Result.Result<AICall> {
           let damage = 10;
           personResult.value.applyAttack(damage, Option.makeSome(8), false);
           Std.writeLine(`You punched ${personResult.value.getName()}`)
-          Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwareness()}`);
+          Std.writeLine(`${personResult.value.getName()}:\nHealth: ${personResult.value.getHealth()}, State: ${personResult.value.getState()}, Awareness: ${personResult.value.getAwarenessAsString()}`);
           if (personResult.value.getState() === "Dead") {
             Std.writeLine(personResult.value.getName() + " is dead");
             env.checkPersonObjectives(personResult.value);
             env.applyBadActionToAll();
+            return Result.makeSuccess({ kind: "AIMove" });
+          } else {
             return Result.makeSuccess({ kind: "AIMove" });
           }
         } else {
@@ -1024,8 +1056,9 @@ export function amuse(personName, env) : Result.Result<AICall> {
   // Save the game.
   export function save(env: Environment) : Result.Result<AICall> {
     Std.writeLine("You saved the game");
-    Std.writeEnv(env);
-    Std.writeRoom(env.getRoom(), env.getMap());
+    //WorldLoading.writeEnv(env);
+    //WorldLoading.writeRoom(env.getRoom(), env.getMap());
+    WorldLoading.save(env);
     env.setStatus("Continue");
     return Result.makeSuccess({ kind: "AIWait" });
   }
@@ -1040,7 +1073,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
       if (roomNameOpt.kind === "None")
         return Result.makeFailure(roomName + " is not a scoutable location");
       else {
-        let roomResult = Std.readRoom(roomName);
+        let roomResult = WorldLoading.readRoom(roomName);
         if (roomResult.kind === "Failure")
           return roomResult;
         else {
@@ -1214,11 +1247,11 @@ export function amuse(personName, env) : Result.Result<AICall> {
   
   // Teleport to a room. Will throw an exception if the room is not found in a file. Only used for debugging purposes.
   export function teleport(roomName: string, env: Environment) : Result.Result<AICall> {
-    let roomResult = Std.readRoom(roomName);
+    let roomResult = WorldLoading.readRoom(roomName);
     if (roomResult.kind === "Failure")
       return Result.makeFailure("Error " + roomResult.value);
     else {
-      Std.writeRoom(env.getRoom(), env.getMap());
+      WorldLoading.writeRoom(env.getRoom(), env.getMap());
       env.setRoom(roomResult.value[0]);
       env.setMap(roomResult.value[1]);
       env.addVisited(roomName);
@@ -1238,6 +1271,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
     }
   }
 
+
   // Unlock an adjacent room if the player has the right key.
   export function unlock(roomName: string, env: Environment) : Result.Result<AICall> {
     let adjRooms = env.getMap().adjacentRooms;
@@ -1252,7 +1286,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
         function changeLockState(roomName: string, roomInfo: [Room, RoomMap]) : [Room, RoomMap] {
           let [room, map] = roomInfo;
           let newAdjRoom: AdjacentRoom = { kind: "AdjacentRoom", name: roomName, lockState: { kind: "Unlocked" } };
-          let newAdjRooms = List.replaceByWith((p: AdjacentRoom) => p.name.toLowerCase() === roomName, newAdjRoom, map.adjacentRooms);
+          let newAdjRooms = List.replaceByWith((p: AdjacentRoom) => p.name.toLowerCase() === roomName.toLowerCase(), newAdjRoom, map.adjacentRooms);
           return [room, { kind: "RoomMap", currentRoom: map.currentRoom, adjacentRooms: newAdjRooms, overlookRooms: map.overlookRooms }];
         }
 
@@ -1260,28 +1294,30 @@ export function amuse(personName, env) : Result.Result<AICall> {
         let code = roomResult.value.lockState.code;
         if (List.countBy((i: Item) => i.kind === "Key" && i.doorCode === code, env.getPlayer().getItems()) >= 1) {
           // Load the next room.
-          let loadedRoomResult = Std.readRoom(roomName);
+          let loadedRoomResult = WorldLoading.readRoom(roomName);
           if (loadedRoomResult.kind === "Failure")
             return loadedRoomResult;
           else {
             // Unlock the access for all other rooms that lead to this room.
-            let otherRoomNames = List.map((a: AdjacentRoom) => a.name.toLowerCase(),loadedRoomResult.value[1].adjacentRooms).filter(s => s !== roomName);
+            let otherRoomNames = List.map((a: AdjacentRoom) => a.name.toLowerCase(), loadedRoomResult.value[1].adjacentRooms).filter(s => s !== roomName);
             otherRoomNames.forEach(name => {
-              let nameRoomResult = Std.readRoom(name);
+              let nameRoomResult = WorldLoading.readRoom(name);
               if (nameRoomResult.kind === "Failure") {
                 Std.writeLine(nameRoomResult.value)
               } else {
                 let newRInfo = changeLockState(roomName, nameRoomResult.value);
-                Std.writeRoom(newRInfo[0], newRInfo[1]);
+                WorldLoading.writeRoom(newRInfo[0], newRInfo[1]);
               }
             })
+            
+            Std.writeLine(`You unlocked ${roomName}`);
+            let map = changeLockState(roomName, [env.getRoom(), env.getMap()]);
+            env.setMap(map[1]);
             return Result.makeSuccess({ kind: "AIMove" });
           }
         } else {
           return Result.makeFailure(`The door could not be unlocked. You do not have a ${code} key`);
         }
-        
-        
       }
     }
   }
@@ -1318,7 +1354,7 @@ export function amuse(personName, env) : Result.Result<AICall> {
         }
 
       case "Objectives":
-        Std.writeLine("Objecties:");
+        Std.writeLine("Objectives:");
         List.map((o: Objective.Objective) => Std.writeLine(Objective.toString(o)), env.getObjectives());
         return Result.makeSuccess({ kind: "AIWait" });
 

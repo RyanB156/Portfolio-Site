@@ -5,6 +5,7 @@ import { Random } from './random';
 import { Personality } from './personality';
 import { Option } from './option';
 import { Init } from './item';
+import { Info } from './info';
 
 export namespace PeopleData {
   
@@ -115,8 +116,7 @@ export namespace PeopleData {
     }
 
     let person = new Person(
-      List.randomChoice(names),
-      "",
+      new Info(List.randomChoice(names), ""),
       persontypeOpt.kind === "Some" ? persontypeOpt.value : List.randomChoice(personTypeChanceByRoomType(roomType)),
       getGenderByChance(),
       getSexualityByChance(),
@@ -133,8 +133,8 @@ export namespace PeopleData {
 
   // Give guards weapons so they are more of a threat.
   function armTheGuards(people: Person[]) {
-    let m4 = Init.initRangedWeapon(30, "VHigh", 30, "GuardM4", "A standard issue military carbine");
-    let pistol = Init.initRangedWeapon(15, "VMedium", 10, "GuardPistol", "The standard issue for the guards");
+    let m4 = Init.initRangedWeapon("GuardM4", "A standard issue military carbine", 30, "vhigh", 30);
+    let pistol = Init.initRangedWeapon("GuardPistol", "The standard issue for the guards", 15, "vmedium", 10);
 
     people.forEach(p => {
       if (p.getType() === "Guard") {

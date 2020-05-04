@@ -1,195 +1,272 @@
+import { Environment } from './environment';
+import { Room, RoomMap, RoomConnect, AdjacentRoom, RoomTypes } from './room';
+import { List } from './list';
+import { Random } from './random';
+import { RoomData } from './room-data';
+import { SpawnRoom } from './spawn-room';
+import { Option } from './option';
+import { Item, Init, HiddenPassageway, Clue, Weapon, WeaponType } from './item';
+import { ItemData } from './item-data';
+import { Person } from './person';
+import { Objective } from './objective';
+
 export namespace WorldGeneration {
 
+  export interface SaveData {
+    environment: Environment,
+    roomData: Object
+  }
 
   let secretClosetChance = 0.20
 
   // Check that all rooms are connected. May work, needs more testing.
-  let validateRoomConnectList (map:RoomConnect list) =
-      let adjRoomNames room =
-          let (name,adjRooms,overlook) = room
-          adjRooms |> List.map fst
+  function validateRoomConnectList(roomConnects: RoomConnect[]) : boolean {
+    
+    // Return the list of adjacent rooms from the specified map.
+    let adjRoomNames = (roomMap: RoomMap) => List.map((a: AdjacentRoom) => a.name, roomMap.adjacentRooms);
 
-      let rec inner acc list visited =
-          match list with
-          | [] -> true // Exit recursion when all rooms have been visited and removed from the list.
-          | x::xs -> 
-              if acc |> List.containsBy (adjRoomNames >> List.contains (Tuple3.fst x)) then inner (x::acc) xs [] // Check next list item against the connections in acc.
-              else 
-                  if visited |> List.contains x then printfn "\nFailed: %A\n" x; false else            
-                  inner acc (xs@[x]) (x::visited)
+    let map = List.map((rc: RoomConnect) => rc.roomMap, roomConnects);
+    let acc: RoomMap[] = [map[0]]
+    let list: RoomMap[] = [map[map.length - 1]]
+    let visited: RoomMap[] = [];
 
-      let map = map |> List.map (fun rC -> rC.RoomMap)
-      inner [List.head map] (List.tail map) []
+    while (list.length > 0) {
+      let x = list.shift();
+      // If the current room is connected to by at least one room in acc, then add the current room x to acc.
+      if (List.countBy((rM: RoomMap) => adjRoomNames(rM).includes(x.currentRoom), acc) >= 1) {
+        acc.unshift(x);
+      } else {
+        if (visited.includes(x)) { // If x already visited and all other rooms have been processed, then fail.
+          console.log("validateRoomConnectList Failed: " + JSON.stringify(x));
+          return false;
+        } else { // Else move x to the end of the list and mark it as visited.
+          list.push(x);
+          visited.unshift(x);
+        }
+      }
+    }
 
 
-  let activateClosetChance roomType (rng:Random) =
-      match roomType with
-      | Closet false -> Closet (rng.Next(0, 2) = 0)
-      | _ -> roomType
+    return true;
+  }
+
+
+  function activateClosetChance(roomType: RoomTypes.SpawnRoomType) {
+    if (roomType.kind === "Closet" && !roomType.hasSecret)
+      roomType.hasSecret = Random.nextInt(0, 2) === 0;
+    return roomType;
+  }
+
       
   // Default rooms. Every setup has each of these.
-  let roomSpawnBase = 
-      [ Spawn; Patio; Garden; Garage; Bathroom; Stairs; Hallway; CommonRoom; EntranceWay; PrivateRoom; Closet true; MissionRoom ]
+  let roomSpawnBase: RoomTypes.SpawnRoomType[] = [ 
+    { kind: "Spawn" }, 
+    { kind: "Patio" }, 
+    { kind: "Garden" }, 
+    { kind: "Garage" }, 
+    { kind: "Bathroom" }, 
+    { kind: "Stairs" }, 
+    { kind: "Hallway" }, 
+    { kind: "CommonRoom" }, 
+    { kind: "EntranceWay" }, 
+    { kind: "PrivateRoom" }, 
+    { kind: "Closet", hasSecret: true }, 
+    { kind: "MissionRoom" } 
+  ];
 
   let roomSpawnBaseCount = 12
 
-  // Get a list of RoomTypes and then map over them with actual data from RoomData.fs and assign extra data for the number of connections each room can have.
-  let getRoomSpawnData roomCount (rng:Random) =
-      if roomCount <= roomSpawnBaseCount then 
-          roomSpawnBase
-          |> Seq.map (RoomData.spawnRoomNameDesc rng)
-          |> Seq.map (RoomData.getRoomFromRoomData rng)
-          |> Seq.map (fun (rData,rType) -> rData, SpawnRoom.initSpawnRoom rng rType RoomData.getConnectionLimit)
-      else
-      Seq.initInfinite ( fun _ -> RoomData.roomChanceWeights |> List.randomChoice rng )
-      |> Seq.append roomSpawnBase
-      |> Seq.map (RoomData.spawnRoomNameDesc rng)    // Get name and description for each room based on roomType.
-      |> Seq.distinct // Duh! If you want the rooms to be distinct by name and description, don't add random items to them yet!!!
-      |> Seq.map (RoomData.getRoomFromRoomData rng)
-      |> Seq.map (fun (rData,rType) -> rData, activateClosetChance rType rng)
-      |> Seq.map (fun (rData,rType) -> rData, SpawnRoom.initSpawnRoom rng rType RoomData.getConnectionLimit)
-      |> Seq.take roomCount
 
-  /// Create to adjacency graphs for each room in the game.
-  let connectRooms (rng:Random) roomList =
-      // Initial pass to connect all rooms in the order they appear in the list.
-      let firstPass list =
-          let rec inner list acc =
-              match list with
-              | [] -> acc // No rooms left to connect -> return list of connected rooms
-              | x::[] -> x::acc // One room left with no rooms for it to connect to -> return list of connected rooms with this one added.
-              | x::y::xs ->
-                  let (newX, newY) = SpawnRoom.connectRooms x y rng
-                  inner (newY::xs) (newX::acc)
-          inner list []
-      // Final pass to connect rooms randomly to rooms they are not yet connected to, within their connection limits.
-      let finalPass list =
-          let rec findFreeRoom room list =
-              let list =
-                  match room.SpawnRoom.Type with
-                  | Closet _ -> list |> List.filter (fun rC -> match rC.SpawnRoom.Type with | MissionRoom -> false | _ -> true)
-                  | MissionRoom -> list |> List.filter (fun rC -> match rC.SpawnRoom.Type with | Closet _ -> false | _ -> true)
-                  | _ -> list
-              match list |> List.filter (SpawnRoom.areConnected room >> not) |> List.filter (SpawnRoom.isMaxedOut >> not) with
-              | [] -> None
-              | x::[] -> Some x
-              | xs -> xs |> List.randomChoice rng |> Some
+  function getRoomSpawnData(roomCount: number) : RoomConnect[] {
+    
+    let randomCount = 0;
+    if (roomCount > roomSpawnBaseCount) {
+      randomCount = roomCount - roomSpawnBaseCount; // Find out how many random rooms to add
+    }
+    roomCount = Math.max(roomSpawnBaseCount, roomCount); // Always add 'roomSpawnBaseCount' rooms or more
+        
+    let roomTypes: RoomTypes.SpawnRoomType[] = [];
 
-          let rec inner list acc = // acc for fully finished rooms
-              match list with
-              | [] -> acc
-              | x::xs when xs |> List.forall (SpawnRoom.areConnected x) -> inner xs (x::acc)
-              | x::xs when x |> SpawnRoom.isMaxedOut -> inner xs (x::acc)
-              | x::xs ->
-                  match findFreeRoom x xs with
-                  | None -> inner xs (x::acc)
-                  //| Some next when (x |> SpawnRoom.isCloset) && (next |> SpawnRoom.isMissionRoom) || (x |> SpawnRoom.isMissionRoom) && (next |> SpawnRoom.isCloset) ->
-                    //  let newXS = xs |> List.remove next  // next is picked randomly so have to update the list.
-                      //inner (x::next::newXS) acc
-                  | Some next ->  // A match has been found. Connect the two rooms and decide which, if any will be put back on the pile or moved to acc.
-                      let (newX, newNext) = SpawnRoom.connectRooms x next rng
-                      match SpawnRoom.isMaxedOut newX, SpawnRoom.isMaxedOut newNext with
-                      | true, true ->   // Both are done -> move both to acc.
-                          let newXS = xs |> List.removeOne next
-                          inner newXS (newX::newNext::acc)
-                      | false, true ->   // Randomly chosen room is done -> move it to acc.
-                          let newXS = xs |> List.removeOne next
-                          inner (newX::newXS) (newNext::acc)
-                      | true, false ->   // Loop room is done -> move it to acc, leaving the chosen room on the list.
-                          let newXS = xs |> List.removeOne next
-                          inner (newNext::newXS) (newX::acc)
-                      | false, false ->   // Both are not yet done -> leave both on the list.
-                          let newXS = xs |> List.removeOne next
-                          inner (newX::newNext::newXS) acc
+    // Create a list of room types. Add 10 to make up for elements that are removed by the distinct function.
+    for (let i = 0; i < randomCount + 10; i++) {
+      let roomType = List.randomChoice(RoomData.roomChanceWeights());
+      roomTypes.push(roomType);
+    }
+    // Force a minimum amount of rooms.
+    roomTypes = roomSpawnBase.concat(roomTypes);
 
-          inner list []            
+    // Set names and descriptions for each room type and create a distinct list of them.
+    let nameDescriptionPairs = List.map((t: RoomTypes.SpawnRoomType) => RoomData.spawnRoomNameDesc(t), roomTypes);
+    nameDescriptionPairs = List.distinctBy((nDP) => nDP[0][0], nameDescriptionPairs);
+    
+    // Convert room name and description into the actual room and room map paired with the room type.
+    let roomData = List.map(nDP => RoomData.getRoomFromRoomData(nDP), nameDescriptionPairs);
+
+    // Activate closets in the map to set them as secret passageways.
+    roomData = List.map(rD => [[rD[0][0], rD[0][1]], activateClosetChance(rD[1])], roomData);
+    let spawnRooms: [[Room, RoomMap], SpawnRoom][] = List.map(rD => [[rD[0][0], rD[0][1]], SpawnRoom.initSpawnRoom(rD[1], RoomData.getConnectionLimit)], roomData);
+
+    // Convert the tuple types into the equivalent RoomConnect types.
+    let roomConnects: RoomConnect[] = List.map((sR: [[Room, RoomMap], SpawnRoom]) => { 
+      return { kind: "RoomConnect", room: sR[0][0], roomMap: sR[0][1], spawnRoom: sR[1] }
+      }, spawnRooms);
+
+    return roomConnects.slice(0, roomCount - 1); // Take roomCount elements from the list.
+
+  }
+
+
+  // Hopefully this works... Fingers crossed...
+  function connectRooms(roomList: RoomConnect[]) : RoomConnect[] {
+
+    // Connect each room to the one next to it in the list.
+    function firstPass(list: RoomConnect[]) : void {
+      List.reduce((rCA: RoomConnect, rCB: RoomConnect) => {
+        SpawnRoom.connectRooms(rCA, rCB);
+        return rCB;
+      }, list);
+    }
+
+    function finalPass(list: RoomConnect[]) : void {
       
-      roomList |> firstPass |> finalPass  // first pass links all rooms in their list order, final pass links based on rng.
+      function findFreeRoom(room: RoomConnect, list: RoomConnect[]) : Option.Option<RoomConnect> {
 
-  let tryLinkSecretCloset (rng:Random) (rooms:RoomConnect list) =
-      // Closet has the mission room added to its map -> add room Data to the hiddenPassageway.
-      let rec linkPassageways mRoomNames (closet:RoomConnect) =
-          match closet.Room.Items |> List.tryFind (function | HiddenPassageway (_,_) -> true | _ -> false) with
-          | None -> linkPassageways mRoomNames {closet with Room = {closet.Room with Items = (ItemData.HiddenPassageway.getItem rng)::closet.Room.Items}}
-          | Some (HiddenPassageway(info, roomNames)) ->
-              let newPassage = HiddenPassageway (info, mRoomNames @ roomNames)
-              let newItems = closet.Room.Items |> List.replaceByWith (function | HiddenPassageway (_,_) -> true | _ -> false) newPassage
-              let newRoom = {closet.Room with Items = newItems}
-              {closet with Room = newRoom}
-          | _ -> failwith "Default clause hit in WorldGeneration.tryLinkSecretCloset.linkPassageways"
+        // Closets and MissionRooms will be connected later. Do not connect them here.
+        if (room.spawnRoom.type.kind === "Closet") {
+          list = list.filter((rC: RoomConnect) => rC.spawnRoom.type.kind !== "MissionRoom");
+        } else if (room.spawnRoom.type.kind === "MissionRoom") {
+          list = list.filter((rC: RoomConnect) => rC.spawnRoom.type.kind !== "Closet");
+        }
 
-      let linkClosetToMissionRoom closet mRoom = // closet -> mRoom = secret. mRoom -> closet = unlocked
-          SpawnRoom.connectRoomsWithLockState closet mRoom Secret Unlocked |> fst
-      let linkMissionRoomToCloset mRoom closet =
-          SpawnRoom.connectRoomsWithLockState closet mRoom Secret Unlocked |> snd
+        list = list.filter((rC: RoomConnect) => !SpawnRoom.areConnected(room, rC) && !SpawnRoom.isMaxedOut(rC));
+        if (list.length === 0) {
+          return Option.makeNone();
+        } else if (list.length === 1) {
+          return Option.makeSome(list[0]);
+        } else {
+          return Option.makeSome(List.randomChoice(list));
+        }
 
-      // type RoomConnect = {Room: Room; RoomMap: RoomMap; SpawnRoom: SpawnRoom}
-      let secretClosets = rooms |> List.filter (fun rC -> match rC.SpawnRoom.Type with | Closet true -> true | _ -> false)
-      let missionRooms = rooms |> List.filter (fun rC -> match rC.SpawnRoom.Type with | MissionRoom -> true | _ -> false)
+      }
 
-      let newSecretClosets = 
-          secretClosets 
-          |> List.map (fun c -> missionRooms |> List.fold (fun s m -> linkClosetToMissionRoom s m) c)
-          |> List.map (linkPassageways (missionRooms |> List.map (fun rC -> rC.Room.Info.Name)))
+      let i = 0;
+      while (i < list.length) {
 
-      let newMissionRooms = missionRooms |> List.map (fun m -> secretClosets |> List.fold (fun s c -> linkMissionRoomToCloset s c) m)
+        if (SpawnRoom.isMaxedOut(list[i])) { // Skip over the current room because it is done.
+          i++;
+        } else if (List.forAll(rC => SpawnRoom.areConnected(list[i], rC), list.slice(i + 1, list.length - 1))) { // Remove the room option if all other rooms are connected to it.
+          i++; // Finish processing the current room.
+        } else if (SpawnRoom.isMaxedOut(list[i])) {
+          i++; // Finish processing the current room.
+        } else {
 
-      let restOfRooms = rooms |> List.filter (fun r -> secretClosets@missionRooms |> List.contains r |> not)
-      newSecretClosets @ newMissionRooms @ restOfRooms
+          let freeRoomOpt = findFreeRoom(list[i], list.slice(i + 1, list.length - 1)); // Try to find a free room to connect the the first room in the list.
+          if (freeRoomOpt.kind === "Some") {
+            SpawnRoom.connectRooms(list[i], freeRoomOpt.value); // Connect the current room to the free room.
+          }
+          i++;
+        }
+      }
+    }
 
-      //Makes more sense here as it's the last time all of the rooms will be loaded at once
-  /// Find mission items (targets and intel) for use by the Environment object for the game. 
-  let findMissionObjectives roomCList =
-      
-      let folder (roomC:RoomConnect) =
-          let intelList = roomC.Room.Items |> List.filter (function | Intel _ -> true | _ -> false)
-          let targetList = roomC.Room.People |> List.filter (fun p -> match p.Type with | Target -> true | _ -> false)
-          let itemObjs = intelList |> List.map (fun i -> CollectIntel (false, Item.getName i), roomC.Room.Info.Name)
-          let targetObjs = targetList |> List.map (fun t -> Kill (false, t.Info.Name, Alive), roomC.Room.Info.Name)
-          itemObjs @ targetObjs
+    firstPass(roomList);
+    finalPass(roomList);
+    return roomList;
 
-      roomCList |> List.fold (fun objList rInf -> (folder rInf) @ objList) []
+  }
+
+
+  // Try to connect secret closets to mission rooms on the map.
+  function tryLinkSecretCloset(rooms: RoomConnect[]) {
+
+    function linkPassageways(mRoomNames: string[], closet: RoomConnect) {
+      let passagewayResult = <Option.Option<HiddenPassageway>>List.tryFind((i: Item) => i.kind === "HiddenPassageway", closet.room.getItems());
+      if (passagewayResult.kind === "None") { // The closet does not have an existing passageway -> add one.
+        let passageway = <HiddenPassageway>ItemData.HiddenPassageway.getItem(); // Get a random passageway to add to the closet.
+        passageway.rooms = mRoomNames;
+        closet.room.getItems().push()
+      } else { // The closet does have an existing passageway -> update it.
+        passagewayResult.value.rooms = mRoomNames.concat(passagewayResult.value.rooms);
+      }
+    }
+
+    function linkClosetToMissionRoom(closet, mRoom) { // closet -> mRoom = secret. mRoom -> closet = unlocked
+      SpawnRoom.connectRoomsWithLockState(closet, mRoom, { kind: "Secret" }, { kind: "Unlocked" });
+    }
+    function linkMissionRoomToCloset(mRoom, closet) {
+      SpawnRoom.connectRoomsWithLockState(closet, mRoom, { kind: "Secret" }, { kind: "Unlocked" }) ;
+    }
+
+    let secretClosets = rooms.filter((rC: RoomConnect) => rC.spawnRoom.type.kind === "Closet" && rC.spawnRoom.type.hasSecret);
+    let missionRooms = rooms.filter((rC: RoomConnect) => rC.spawnRoom.type.kind === "MissionRoom");
+    
+    // Link closets and mission rooms.
+    secretClosets.forEach(closetConnect => {
+      missionRooms.forEach(missionConnect => {
+        linkClosetToMissionRoom(closetConnect, missionConnect); // Connect every closet to every mission room.
+        linkMissionRoomToCloset(missionConnect, closetConnect); // Connect every mission room to every closet.
+      });
+      linkPassageways(List.map(rC => rC.room.getName(), missionRooms), closetConnect); // Add passageways to every closet.
+    });
+  }
+
+  // Find mission items (targets and intel) for use by the Environment object for the game. 
+  function findMissionObjectives(roomConnects: RoomConnect[]) : Objective.Objective[] {
+    function folder(rC: RoomConnect) {
+      let intelList = rC.room.getItems().filter((i: Item) => i.kind === "Intel");
+      let targetList = rC.room.getPeople().filter((p: Person) => p.getType() === "Target");
+      let itemObjs = List.map((i: Item) => Objective.makeCollectIntel(false, i.info.name), intelList);
+      let targetObjs = List.map((p: Person) => Objective.makeKill(false, p.getName(), "Alive"), targetList);
+      return itemObjs.concat(targetObjs);
+    }
+    return List.fold((s, t) => folder(t).concat(s), [], roomConnects);
+  }
+
 
   // Create clues with info about the objectives and their locations and put them in the appropriate rooms.
-  let pairObjectivesWithClueRooms objectives (rng:Random) rooms =
-      let rec inner objs rooms acc =
-          match objs, rooms with
-          | [], rs -> rs @ acc
-          | os, [] -> acc
-          | o::os, r::rs when ItemData.clueRooms |> List.contains r.SpawnRoom.Type ->
-              let room = r.Room
-              match ItemData.Clue.getItem rng with
-              | Clue (info, clueInfo) ->
-                  let clueStr = sprintf "%s: %s" (snd o) (o |> fst |> Objective.getInfoStr)
-                  let newClue = Clue(info,clueStr)
-                  let newRoom = {room with Items = newClue::room.Items}
-                  let newRC = {r with Room = newRoom}
-                  inner os rs (newRC::acc)
-              | _ -> failwith "Fail in WorldGeneration.pairObjectivesWithClueRooms"
-          | o::os, r::rs -> inner os rs (r::acc)
-      inner objectives rooms []
+  function pairObjectivesWithClueRooms(objectives: Objective.Objective[], rooms: RoomConnect[]) {
 
-  /// The main function of the WorldGeneration project.
-  let spawnRooms roomCount (rng:Random) =
-      let roomInfo =
-          getRoomSpawnData roomCount rng
-          |> Seq.map SpawnRoom.initRoomConnect
-          |> Seq.toList
-          |> connectRooms rng
-          |> tryLinkSecretCloset rng  // Forces a hidden passageway to "hopefully" eliminate the bug where (Closet true) doesn't get a hiddenpassageway.
-          |> SpawnRoom.tryFilterClosetConnections // Remove duplicate connections occuring between closets and mision rooms.
-          //|> Debug.printListPass "Connections"
+    function getClue(name: string, infoString: string) {
+      let clue = <Clue>ItemData.Clue.getItem();
+      clue.clueInfo = name + ": " + infoString;
+      return clue;
+    }
 
-      let objectives = roomInfo |> findMissionObjectives
-      let roomData = 
-          roomInfo
-          |> pairObjectivesWithClueRooms objectives rng
-          |> List.map SpawnRoom.roomConnectToRoomInfo
+    let i = 0;
+    let forceClue = false;
+    // Make clues for all objectives.
+    while (i < objectives.length) {
+      rooms.forEach(rC => {
+        if (i >= objectives.length)
+          return;
 
-      
-      roomData, (objectives |> List.map fst)
+        if (ItemData.clueRoomTypes.includes(rC.spawnRoom.type + "")) { // Put clues in clue rooms first.
+          let clue = getClue(objectives[i].name, Objective.getInfoStr(objectives[i]));
+          rC.room.getItems().push(clue);
+          i++;
+        } else if (forceClue) { // Then put clues in any available rooms on subsequent passes.
+          let clue = getClue(objectives[i].name, Objective.getInfoStr(objectives[i]));
+          rC.room.getItems().push(clue);
+          i++;
+        }
+        forceClue = true;
+      });
+    }
+  }
 
-  // Main game will call this function to generate game data, then use a new module in RoomIO.fs to save all game data to a special folder,
-  // erasing what was previously in the folder, in order to run the game.
+  export function spawnRooms(roomCount) : [[Room, RoomMap][], Objective.Objective[]] {
+
+    let roomInfo = getRoomSpawnData(roomCount);
+    roomInfo = connectRooms(roomInfo);
+    tryLinkSecretCloset(roomInfo);
+    SpawnRoom.tryFilterClosetConnections(roomInfo);
+
+    let objectives = findMissionObjectives(roomInfo);
+    pairObjectivesWithClueRooms(objectives, roomInfo);
+    let roomMapData = List.map(SpawnRoom.roomConnectToRoomInfo, roomInfo);
+
+    return [roomMapData, objectives];
+  }
+
 
 }

@@ -16,6 +16,13 @@ export namespace Option {
   export function makeNone() : None {
     return { kind: "None" };
   }
+
+  export function optionToString<T>(option: Option<T>) : string {
+    if (option.kind === "Some")
+      return `Some(${option.value})`;
+    else
+      return "None";
+  }
   
   export type Option<T> = Some<T> | None
 }

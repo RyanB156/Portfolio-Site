@@ -1,7 +1,6 @@
-
-import { Info } from './domain-types';
 import { Option } from './option';
 import { List } from './list';
+import { Info } from './info';
 
 export type Visibility = "vlow" | "vmedium" | "vhigh"
 export type WeaponRange = "rshort" | "rmedium" | "rlong"
@@ -29,16 +28,17 @@ export type WeaponType = MeleeWeapon | RangedWeapon
 export type Item = Weapon | Key | Clue | HiddenPassageway | Consumable | Container | Display | Furniture | LargeDisplay | EscapeItem | Intel | Poison
 
 export namespace Init {
-  export function initMeleeWeapon(damage, kOChance, visibility, name, description) : Item {
-    return { kind: "Weapon", weaponType: { kind: "MeleeWeapon", damage: damage, visibility: visibility, koChance: kOChance, isPoisoned: false }, info: new Info(name, description) };
+  export function initMeleeWeapon(name, description, damage, kOChance: Option.Option<number>, visibility: Visibility, isPoisoned: boolean) : Item {
+    return { kind: "Weapon", weaponType: { kind: "MeleeWeapon", damage: damage, visibility: visibility, koChance: kOChance, isPoisoned: isPoisoned }, 
+      info: new Info(name, description) };
   }
           
-  export function initRangedWeapon(damage, visibility, ammoCount, name, description) : Item {
+  export function initRangedWeapon(name, description, damage: number, visibility: Visibility, ammoCount: number) : Item {
     return { kind: "Weapon", weaponType: { kind: "RangedWeapon", damage: damage, visibility: visibility, ammoCount: ammoCount}, 
       info: new Info(name, description) };
   }
   
-  export function initKey(code, name, description) : Item {
+  export function initKey(name: string, description: string, code: DoorCode) : Item {
     return { kind: "Key", doorCode: code, info: new Info(name, description) };
   }
   
@@ -46,15 +46,15 @@ export namespace Init {
     return { kind: "Clue", info: new Info(name, description), clueInfo: clueInfo };
   }
   
-  export function initHiddenPassageway(name, description, roomNames) : Item {
+  export function initHiddenPassageway(name, description, roomNames: string[]) : Item {
     return { kind: "HiddenPassageway", info: new Info(name, description), rooms: roomNames };
   }
   
-  export function initConsumable(name, description, isAlcohol, healthBonus, uses) : Item {
+  export function initConsumable(name, description, isAlcohol: boolean, healthBonus: number, uses: number) : Item {
     return { kind: "Consumable", info: new Info(name, description), isAlcohol: isAlcohol, healthBonus: healthBonus, remainingUses: uses, isPoisoned: false }
   }
   
-  export function initContainer(name, description, items) : Item {
+  export function initContainer(name, description, items: Item[]) : Item {
     return { kind: "Container", info: new Info(name, description), items: items };
   }
   
@@ -115,22 +115,28 @@ export function getWeaponDamageWithUse(item: Item) : Option.Option<number> {
   }
 }
 
+// Return a string to display the item and its stats to the screen. Used when the 'search' command is run.
 export function getNameWithType(item: Item) : string {
   switch (item.kind) {
     case "Weapon": 
-      if (item.weaponType.kind === "MeleeWeapon")
-        return `Melee Weapon V=${item.weaponType.visibility} D=${item.weaponType.damage}:` + 
-          `${item.weaponType.koChance.kind === "Some" ?  `KOC:1/${item.weaponType.koChance.value}` : ""}` +
-          item.weaponType.isPoisoned ? " Poisoned" : "";
-      else
-        return `RangedWeapon V=${item.weaponType.visibility} A=${item.weaponType.ammoCount} D=${item.weaponType.damage}`;
-    case "Key": return "Key:";
-    case "Clue": return "Clue:";
-    case "Consumable": return `Consumable: ${item.isAlcohol ? " Alcholol" : ""} ${item.isPoisoned ? " Poisoned" : ""}`;
-    case "HiddenPassageway": return "Display:";
-    case "EscapeItem": return "Escape:";
-    default: return item.kind + ":";
+      if (item.weaponType.kind === "MeleeWeapon") {
+        let koString = item.weaponType.koChance.kind === "Some" ? ` KOC:1/${item.weaponType.koChance.value}` : "";
+        let poisonString = item.weaponType.isPoisoned ? " Poisoned" : "";
+        return `${item.info.name} - Melee Weapon V=${item.weaponType.visibility} D=${item.weaponType.damage}:` + koString + poisonString;
+      } else {
+        return `${item.info.name} - RangedWeapon V=${item.weaponType.visibility} A=${item.weaponType.ammoCount} D=${item.weaponType.damage}`;
+      }
+    case "Key": return `${item.info.name} - Key`;
+    case "Clue": return `${item.info.name} - Clue`;
+    case "Consumable": return `${item.info.name} - Consumable: ${item.isAlcohol ? " Alcholol" : ""} ${item.isPoisoned ? " Poisoned" : ""}`;
+    case "HiddenPassageway": return `${item.info.name} - Display`;
+    case "EscapeItem": return `${item.info.name} - Escape`;
+    default: return item.info.name + " - " + item.kind + ":";
   }
+}
+
+export function itemToString(item: Item) : string {
+  return getNameWithType(item);
 }
 
 export function isHeavy(item: Item) : boolean {

@@ -3,9 +3,12 @@ import { Option } from './option';
 import { CommandTypes } from './command-types';
 import { Result } from './result';
 import { Environment } from './environment';
-import { AICall } from './person';
+import { AICall, Person } from './person';
 import { Commands } from './commands';
 import { Std } from './std';
+import { List } from './list';
+import { Item, getItems } from './item';
+import { AdjacentRoom } from './room';
 
 export namespace Parser {
 
@@ -29,7 +32,7 @@ export namespace Parser {
     if (arg.length === 1)
       return Result.makeSuccess(result(arg[0]));
     else if (arg.length === 0)
-      return Result.makeFailure(`Missing ${thing} argument for ${cmd}}`);
+      return Result.makeFailure(`Missing ${thing} argument for '${cmd}'`);
     else
       return Result.makeFailure(cmd + " expects one argument");
   }
@@ -309,7 +312,7 @@ export namespace Parser {
       case "Command": return Commands.command(cmd.personName, cmd.command, env);
       case "Compliment": return Commands.compliment(cmd.personName, env);
       case "Consume": return Commands.consume(cmd.itemName, env);
-      case "Diagnose": Std.writeLine(env); return Result.makeSuccess({ kind: "AIWait" });
+      case "Diagnose": Std.writeLine(env.toString()); return Result.makeSuccess({ kind: "AIWait" });
       case "Disguise": return Commands.disguise(cmd.personName, env);
       case "Dishearten": return Commands.dishearten(cmd.personName, env);
       case "Drop": return Commands.drop(cmd.itemName, env);
@@ -403,173 +406,230 @@ export namespace Parser {
         if (splitCommands.length === 0)
           return Result.makeFailure ("");
         else {
-          Commands.printSuggestions(splitCommands[0], 5);
+          return Result.makeFailure(Commands.printSuggestions(splitCommands[0], 1));
         }
     }
   }
       
             
-
   // Scan the command to match the arguments then send to Commands.fs to run the command.
   // Then the environment is sent to AI.fs to process the AI's action.
-  let processInput command env =
-      match scanCommand command with
-          | Failure f -> Failure f
-          | Success s -> runCommand s env
-
+  export function processInput(command: string, env: Environment) : Result.Result<AICall> {
+    let scanResult = scanCommand(command);
+    if (scanResult.kind === "Failure")
+      return scanResult;
+    else
+      return runCommand(scanResult.value, env);
+  }
+  
 
   // ------ Key Input and Autocomplete ------ //
+  let implode = (cs: string[]) => List.reduce((a, b) => a + b, cs);
 
-  let implode (cs:seq<char>) =
-      cs |> Seq.fold (fun s t -> s + string t) ""
+  // Returns a list of suggestions. The suggestions will contain initial characters that match the pattern.
+  function stringMatch(matchStrings: string[], pattern: string) : string {
+    let suggestions = List.map((p: [number, string]) => p[1], Commands.getSuggestions(matchStrings, pattern, 1));
+    return suggestions.length >= 1 ? List.reduce((a: string, b: string) => a + " " + b, suggestions) : "";
+  }
 
-  let stringMatch matchStrings pattern =
-      match Commands.getSuggestions matchStrings pattern with
-      | x::xs -> x |> snd
-      | _ -> ""
+  function personInquiry(inquiry: string) : Option.Option<string> {
+    return Person.inquireInfo.includes(inquiry) ? Option.makeSome(inquiry) : Option.makeNone();
+  }
+  
+  function matchRoomPeople(env: Environment, name: string) : string {
+    return stringMatch(List.map((p: Person) => p.getName().toLowerCase(), env.getRoom().getPeople()), name);
+  }
 
-  let (|PersonInquiry|_|) inquiry = if Person.inquireInfo |> List.contains inquiry then Some inquiry else None
+  function matchInventoryItem(env: Environment, name: string) : string {
+    return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), env.getPlayer().getItems()), name);
+  }
 
-  let matchRoomPeople env name =
-      name |> stringMatch (env.Room.People |> List.map (Person.getName >> String.toLower))
+  function matchRoomItem(env: Environment, name: string) : string {
+    return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), env.getRoom().getItems()), name);
+  }
+  
+  function matchAllItems(env: Environment, name: string) : string {
+    let allItems = List.map((i: Item) => i.info.name.toLowerCase(), env.getRoom().getItems()).concat(List.map((i: Item) => i.info.name.toLowerCase(), env.getPlayer().getItems()));
+    return stringMatch(allItems, name);
+  }
 
-  let matchInventoryItem env name =
-      name |> stringMatch (env.Player.Items |> List.map (Item.getName >> String.toLower))
+  function matchPeopleAndItems(env: Environment, name: string) : string {
+    let peopleNames = List.map((p: Person) => p.getName().toLowerCase(), env.getRoom().getPeople());
+    let itemNames = List.map((i: Item) => i.info.name.toLowerCase(), env.getRoom().getItems());
+    return stringMatch(peopleNames.concat(itemNames), name);
+  }
 
-  let matchRoomItem env name =
-      name |> stringMatch (env.Room.Items |> List.map (Item.getName >> String.toLower))
+  function matchContainerItems(env: Environment, container: Item, itemName: string) : string {
+    if (container.kind === "Container") {
+      return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), container.items), itemName);
+    } else {
+      return "";
+    }
+  }
 
-  let matchAllItems env name =
-      let allItems = (env.Room.Items |> List.map (Item.getName >> String.toLower)) @ (env.Player.Items |> List.map (Item.getName >> String.toLower))
-      name |> stringMatch allItems
+  function matchPersonItems(env: Environment, person: Person, itemName: string) : string {
+    let items = person.getItems();
+    return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), items), itemName);
+  }
 
-  let matchPeopleAndItems env name =
-      let peopleNames = env.Room.People |> List.map (Person.getName >> String.toLower)
-      let itemNames = env.Room.Items |> List.map (Item.getName >> String.toLower)
-      let allNames = peopleNames @ itemNames
-      name |> stringMatch allNames
+  function matchPersonOrContainerItems(env: Environment, targetName: string, itemName: string) : string {
+    let personResult = env.tryFindPersonByNameLower(targetName); // Check if the target is a person.
+    if (personResult.kind === "Some") { // If so, match against the person's items.
+      return matchPersonItems(env, personResult.value, itemName);
+    } else { // Otherwise, check if the target is a container.
+      let containerResult = env.tryFindItemByName(targetName);
+      if (containerResult.kind === "Some") {
+        return matchContainerItems(env, containerResult.value, itemName);
+      } else {
+        return "";
+      }
+    }
+  }
 
-  let matchAdjacentRooms env name =
-      name |> stringMatch (env.Map |> (fun (_,adj,_) -> adj) |> List.map (fst >> String.toLower))
+  function matchAdjacentRooms(env: Environment, name: string) : string {
+    return stringMatch(List.map((a: AdjacentRoom) => a.name.toLowerCase(), env.getMap().adjacentRooms), name);
+  }
 
-  let matchOverlookRooms env name =
-      let (_,_,ovl) = env.Map
-      match ovl with
-      | None -> ""
-      | Some ovlRooms -> name |> stringMatch (ovlRooms |> List.map String.toLower)
+  function matchOverlookRooms(env: Environment, name: string) : string {
+    let ovl = env.getMap().overlookRooms;
+    if (ovl.rooms.kind === "None")
+      return "";
+    else
+      return stringMatch(List.map(s => s.toLowerCase(), ovl.rooms.value), name);
+  }
 
-  let holderItemSearch targetName itemName env =
-      match env |> Environment.tryFindPersonByName targetName with
-      | Some person -> itemName |> stringMatch (person.Items |> List.map (Item.getName >> String.toLower))
-      | None ->
-          match env |> Environment.tryFindItemByName targetName with
-          | Some item -> 
-              match item with
-              | Container (itemList, _) -> itemName |> stringMatch (itemList |> List.map (Item.getName >> String.toLower))
-              | _ -> ""
-          | None -> ""
+  function holderItemSearch(targetName: string, itemName: string, env: Environment) {
+    let personResult = env.tryFindPersonByName(targetName);
+    if (personResult.kind === "Some") {
+      return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), personResult.value.getItems()), itemName);
+    } else {
+      let containerResult = env.tryFindItemByName(targetName);
+      if (containerResult.kind === "Some" && containerResult.value.kind === "Container") {
+        return stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), containerResult.value.items), itemName);
+      } else {
+        return "";
+      }
+    }
+  }
 
-  let autoComplete (incompleteText:string) env =
-      let inner () =
-          match incompleteText.ToLower().Trim().Split([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList with
-          | "amuse"::x::[] -> "amuse " + matchRoomPeople env x
-          | "apply"::xs ->
-              match xs with
-              | poisonName::[] -> "apply " + matchInventoryItem env poisonName + " to "
-              | poisonName::"to"::targetName::[] -> sprintf "apply %s to %s" poisonName (matchInventoryItem env targetName)
-              | _ -> "apply "
-          | "approach"::x::[] -> "approach " + matchRoomPeople env x
-          | "attack"::x::[] -> "attack " + matchRoomPeople env x
-          | "capture"::x::[] -> "capture " + matchRoomPeople env x
-          | "cheerup"::x::[] -> "cheerup " + matchRoomPeople env x
-          | "chokeout"::x::[] -> "chokeout " + matchRoomPeople env x
-          | "command"::xs ->
-              match xs with
-              | personName::"stop"::[] -> sprintf "command %s stop" personName
-              | personName::"killyourself"::[] -> sprintf "command %s killyourself" personName
-              | personName::"attack"::targetName::[] -> sprintf "command %s attack %s" personName (matchRoomPeople env targetName)
-              | personName::"goto"::targetName::[] -> sprintf "command %s goto %s" personName (matchAdjacentRooms env targetName)
-              | personName::"pickup"::targetName::[] -> sprintf "command %s pickup %s" personName (matchRoomItem env targetName)
-              | personName::commandName::[] -> sprintf "command %s %s " personName (commandName |> stringMatch Commands.aiCommandList)
-              | personName::[] -> "command " + matchRoomPeople env personName + " "
-              | _ -> "command "
 
-          | "compliment"::x::[] -> "compliment " + matchRoomPeople env x
-          | "consume"::x::[] -> "consume " + matchInventoryItem env x
-          | "describe"::xs -> 
-              match xs with
-              | x::[] -> "describe " + (stringMatch ["area"; "item"; "person"] x) + " "
-              | "item"::x::[] -> "describe item " + matchAllItems env x
-              | "person"::x::[] -> "describe person " + matchRoomPeople env x
-              | _ -> "describe "
-          | "diagnose"::xs -> "diagnose"
-          | "disguise"::x::[] -> "disguise " + matchRoomPeople env x
-          | "dishearten"::x::[] -> "dishearten " + matchRoomPeople env x
-          | "drop"::x::[] -> "drop " + matchInventoryItem env x
-          | "escape"::x::[] -> "escape " + matchRoomItem env x
-          | "equip"::x::[] -> "equip " + matchInventoryItem env x
-          | "followme"::x::[] -> "followme " + matchRoomPeople env x
-          | "give"::xs ->
-              match xs with
-              | itemName::[] -> "give " + (itemName |> matchInventoryItem env) + " to "
-              | itemName::"to"::personName::[] -> sprintf "give %s to %s" itemName (personName |> matchRoomPeople env)
-              | _ -> "give "
-          | "goto"::x::[] -> "goto " + matchAdjacentRooms env x
-          | "forcegoto"::x::[] -> "forcegoto " + matchAdjacentRooms env x
-          | "help"::x::[] -> "help " + (Commands.getCmdSuggestion x 1 |> (function | None -> "" | Some cmdString -> cmdString))
-          | "inquire"::xs ->
-              match xs with
-              | PersonInquiry inquiry::personName::[] -> sprintf "inquire %s %s" inquiry (matchRoomPeople env personName)
-              | x::xs -> "inquire " + (stringMatch Person.inquireInfo x) + " "
-              | _ -> "inquire "
-          | "inspect"::x::[] -> "inspect " + matchAllItems env x
-          | "intimidate"::x::[] -> "intimidate " + matchRoomPeople env x
-          | "leaveme"::x::[] -> "leaveme "
-          | "peek"::x::[] -> "peek " + matchAdjacentRooms env x
-          | "pickup"::x::[] -> "pickup " + matchRoomItem env x
-          | "place"::xs ->
-              match xs with
-              | itemName::[] -> "place " + (itemName |> matchInventoryItem env) + " in "
-              | itemName::PlacePrep p::targetName::[] -> sprintf "place %s %s %s" itemName p (targetName |> matchRoomItem env)
-              | x::[] -> "place " + x
-              | _ -> "place "
-          | "punch"::x::[] -> "punch " + matchRoomPeople env x
-          | "quit"::xs -> "quit "
-          | "romance"::x::[] -> "romance " + matchRoomPeople env x
-          | "save"::xs -> "save "
-          | "scout"::x::[] -> "scout " + matchOverlookRooms env x
-          | "search"::x::[] -> "search " + (x |> stringMatch ("area"::(env.Room.Items |> List.map (Item.getName >> String.toLower))))
-          | "seduce"::x::[] -> "seduce " + matchRoomPeople env x
-          | "survey"::xs -> "survey"
-          | "takefrom"::xs ->
-              match xs with
-              | targetName::[] -> "takefrom " + (matchPeopleAndItems env targetName) + " "
-              | targetName::itemName::[] -> sprintf "takefrom %s %s" targetName (holderItemSearch targetName itemName env)
-              | _ -> "takefrom "
-          | "talk"::x::[] -> "talk " + matchRoomPeople env x
-          | "unequip"::x::[] -> "unequip "
-          | "unlock"::x::[] -> "unlock " + matchAdjacentRooms env x
-          | "view"::xs -> 
-              match xs with
-              | "my"::x::[] -> "view my " + (x |> stringMatch ["stats"; "companion"])
-              | x::[] -> "view " + (x |> stringMatch ["items"; "time"; "my"; "stats"; "objectives"; "visitedrooms"]) + " "
-              | "stats"::y::[] -> "view stats " + (y |> matchRoomPeople env)
-              | _ -> "view "
-          | "wait"::xs -> "wait "
-          | cmd::xs -> Commands.getCmdSuggestion cmd 1 |> (function | None -> "" | Some cmdString -> cmdString + " ")
-          | [] -> ""
-      inner ()
+  // *** Note: Route this to output if returning a list, to input if returning a single item (Wrap match function inside one that returns a special type)
+  export function autoComplete(incompleteText: string, env: Environment) : [string, boolean] {
 
-  // Console handles key input. Returns here on a tab. Parser checks for autocomplete pattern and returns the completed string to console for more input.
-  let keyInputLoop (console:ConsoleExt) (env:Environment) = // Run through input and history from ConsoleExt. Then modify with context based tab autocomplete.
-      
-      let text = console.ReadInput()
-      let rec tabCheck text =
-          match text |> Seq.toList with
-          | '\t'::cs -> 
-              let incompleteText = cs |> implode
-              console.AutoComplete(autoComplete incompleteText env) |> tabCheck
-          | cs -> cs |> implode
-      tabCheck text
+    if (incompleteText === undefined || incompleteText === "")
+      return ["", false];
+
+    let textArgs = incompleteText.toLowerCase().trim().split(" ").filter(s => s !== " " && s !== "");
+
+    if (textArgs.length >= 1) {
+      if (textArgs.length === 2 && textArgs[0] === "amuse") return ["amuse " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs[0] === "apply") {
+        if (textArgs.length === 2) return [`apply ${matchInventoryItem(env, textArgs[1])} to `, true];
+        else if (textArgs.length === 4 && textArgs[2] === "to") return [`apply ${textArgs[1]} to ${matchInventoryItem(env, textArgs[3])}`, true];
+        else return ["apply ", true];
+      }
+      else if (textArgs.length === 2 && textArgs[0] === "approach") return ["approach " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "attack") return ["attack " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "capture") return ["capture " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "cheerup") return ["cheerup " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "chokeout") return ["chokeout " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs[0] === "command") {
+        if (textArgs.length === 3 && textArgs[2] === "stop") return [`command ${textArgs[1]} stop`, true];
+        else if (textArgs.length === 3 && textArgs[2] === "killyourself") return [`command ${textArgs[1]} killyourself`, true];
+        else if (textArgs.length === 4 && textArgs[2] === "goto") return [`command ${textArgs[1]} goto ${matchAdjacentRooms(env, textArgs[3])}`, true];
+        else if (textArgs.length === 4 && textArgs[2] === "pickup") return [`command ${textArgs[1]} pickup ${matchRoomItem(env, textArgs[3])}`, true];
+        else if (textArgs.length === 3) return [`command ${textArgs[1]} ${stringMatch(Commands.aiCommandList, textArgs[2])} `, true];
+        else if (textArgs.length === 2) return [`command ${matchRoomPeople(env, textArgs[1])} `, true];
+        else return ["command ", true];
+      }  
+      else if (textArgs.length === 2 && textArgs[0] === "compliment") return ["compliment " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "consume") return ["consume " + matchInventoryItem(env, textArgs[1]), true];
+      else if (textArgs[0] === "describe") {
+        if (textArgs.length === 3 && textArgs[1] === "item") return ["describe item " + matchAllItems(env, textArgs[2]), true];
+        else if (textArgs.length === 3 && textArgs[1] === "person") return ["describe person " + matchRoomPeople(env, textArgs[2]), true];
+        else if (textArgs.length === 2) return [`describe ${stringMatch(["area", "item", "person"], textArgs[1])} `, true];
+        else return ["describe ", true];
+      }
+      else if (textArgs[0] === "diagnose") return ["diagnose", true];
+      else if (textArgs.length === 2 && textArgs[0] === "disguise") return ["disguise " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "dishearten") return ["dishearten " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "drop") return ["drop " + matchInventoryItem(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "escape") return ["escape " + matchRoomItem(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "equip") return ["equip " + matchInventoryItem(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "followme") return ["followme " + matchRoomPeople(env, textArgs[1]), true];
+
+      else if (textArgs[0] === "give") {
+        if (textArgs.length === 2) return [`give ${matchInventoryItem(env, textArgs[1])} to `, true];
+        else if (textArgs.length === 4 && textArgs[2] === "to") return [`give ${textArgs[1]} to ${matchRoomPeople(env, textArgs[3])}`, true];
+        else return ["give ", true];
+      }
+      else if (textArgs.length === 2 && textArgs[0] === "goto") return ["goto " + matchAdjacentRooms(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "forcegoto") return ["forcegoto " + matchAdjacentRooms(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "help") return ["help " + stringMatch(Array.from(Commands.commandList.keys()), textArgs[1]), true];
+
+      else if (textArgs[0] === "inquire") {
+        if (textArgs.length === 3 && personInquiry(textArgs[1]).kind === "Some") return [`inquire ${textArgs[1]} ${matchRoomPeople(env, textArgs[2])}`, true];
+        else if (textArgs.length === 2) return [`inquire ${stringMatch(Person.inquireInfo, textArgs[1])} `, true];
+        else return ["inquire ", true];
+      }
+      else if (textArgs.length === 2 && textArgs[0] === "inspect") return ["inspect " + matchAllItems(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "intimidate") return ["intimidate " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 1 && textArgs[0] === "leaveme") return ["leaveme ", true];
+      else if (textArgs.length === 1 && textArgs[0] === "load") return ["load ", true];
+      else if (textArgs.length === 2 && textArgs[0] === "peek") return ["peek " + matchAdjacentRooms(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "pickup") return ["pickup " + matchRoomItem(env, textArgs[1]), true];
+
+      else if (textArgs[0] === "place") {
+        if (textArgs.length === 2) return [`place ${matchInventoryItem(env, textArgs[1])} in `, true];
+        else if (textArgs.length === 4 && textArgs[2] === "in") return [`place ${textArgs[1]} ${textArgs[2]} ${matchRoomItem(env, textArgs[3])}`, true];
+        else if (textArgs.length === 2) return [`place ${textArgs[1]}`, true];
+        else return ["place ", true];
+      }
+      else if (textArgs.length === 2 && textArgs[0] === "punch") return ["punch " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 1 && textArgs[0] === "quit") return ["quit ", true];
+      else if (textArgs.length === 2 && textArgs[0] === "romance") return ["romance " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 1 && textArgs[0] === "save") return ["save ", true];
+      else if (textArgs.length === 2 && textArgs[0] === "scout") return ["scout " + matchOverlookRooms(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "search") return ["search " + stringMatch(List.map((i: Item) => i.info.name.toLowerCase(), env.getRoom().getItems()).concat(["area"]), textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "seduce") return ["seduce " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 1 && textArgs[0] === "survey") return ["survey ", true];
+
+      else if (textArgs[0] === "takefrom") {
+        if (textArgs.length === 2) return [`takefrom ${matchPeopleAndItems(env, textArgs[1])} `, true];
+        else if (textArgs.length === 3) return [`takefrom ${textArgs[1]} ${matchPersonOrContainerItems(env, textArgs[1], textArgs[2])}`, true];
+        else return ["takefrom ", true];
+      }
+      else if (textArgs.length === 2 && textArgs[0] === "talk") return ["talk " + matchRoomPeople(env, textArgs[1]), true];
+      else if (textArgs.length === 2 && textArgs[0] === "unequip") return ["unequip ", true];
+      else if (textArgs.length === 2 && textArgs[0] === "unlock") return ["unlock " + matchAdjacentRooms(env, textArgs[1]), true];
+
+      else if (textArgs[0] === "view") {
+        if (textArgs.length === 3 && textArgs[1] === "my") return ["view my " + stringMatch(["stats", "companion"], textArgs[2]), true];
+        else if (textArgs.length === 2) return [`view ${stringMatch(["items", "time", "my", "stats", "objectives", "visitedrooms"], textArgs[1])} `, true];
+        else if (textArgs.length === 3 && textArgs[1] === "stats") return ["view stats " + matchRoomPeople(env, textArgs[2]), true];
+        else return ["view ", true];
+      }
+      else if (textArgs[0] === "wait") return ["wait ", true];
+
+      // Try and match commands with suggestions.
+      else if (textArgs.length === 1) {
+       
+        let suggestions = stringMatch(Array.from(Commands.commandList.keys()), textArgs[0]).split(" ");
+
+        // Set the input area if only one suggestion is found.
+        if (suggestions.length === 1 && suggestions[0].trim() !== textArgs[0].trim()) {
+          return [suggestions[0].trim() + " ", true];
+        } else { // Otherwise, print the selections to the screen.
+          Std.writeLine(suggestions);
+          return [textArgs[0], false];
+        }
+      }
+      else {
+        return [textArgs[0], false];
+      }
+    } else {
+      return [textArgs[0], false];
+    }
+  }
 
 }

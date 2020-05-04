@@ -3,34 +3,16 @@ import { Option } from './option';
 import { Random } from './random';
 
 export namespace List {
-  export function reduceNumber(f: (x: number, y: number) => number, arr: number[]) {
-    if (arr.length == 0)
-      throw "Error";
-    let temp = arr[0];
-    for (let i = 1; i < arr.length; i++) {
-      temp += arr[i];
-    }
-    return temp;
-  }
   
-  export function foldNumber(f: (x: number, y: number) => number, arr: number[], e: number) {
-    if (arr.length == 0)
-      throw "Error";
-    let temp = e;
-    for (let i = 0; i < arr.length; i++) {
-      temp += arr[i];
+  export function arrayToString<T>(f: (x: T) => string, arr: T[]) {
+    if (arr.length === 0)
+      return "[]";
+    else if (arr.length === 1)
+      return `[${arr[0]}]`;
+    else {
+      let str = List.fold((s: string, x: T) => s + f(x) + ", ", "[", arr.slice(0, arr.length - 1));
+      return str + f(arr[arr.length - 1]) + "]";
     }
-    return temp;
-  }
-  
-  export function foldString(f: (x: string, y: string) => string, arr: string[], e: string) {
-    if (arr.length == 0)
-      throw "Error";
-    let temp = e;
-    for (let i = 0; i < arr.length; i++) {
-      temp += arr[i];
-    }
-    return temp;
   }
   
   // Returns a new array containing items from the original array mapped by the specified function.
@@ -50,9 +32,8 @@ export namespace List {
 
   export function reduce<T>(f: (x: T, y: T) => T, arr: T[]) {
     let acc: T = arr[0];
-    arr.forEach((e: T) => {
-      acc = f(acc, e);
-    });
+    for (let i = 1; i < arr.length; i++)
+      acc = f(acc, arr[i]);
     return acc;
   }
   
@@ -78,10 +59,11 @@ export namespace List {
   
   export function forAll<T>(f: (x: T) => boolean, arr: T[]) {
     if (arr.length == 0) return false;
-    arr.forEach((e) => {
-      if (!f(e))
+    for (let i = 0; i < arr.length; i++) {
+      if (!f(arr[i])) {
         return false;
-    });
+      }
+    }
     return true;
   }
 
@@ -107,8 +89,6 @@ export namespace List {
       if (keyGenerator(x) === keyVal)
         count++;
     });
-
-    console.log(`Found ${count} '${x}' with key '${keyVal}'`);
     return count;
   }
 
@@ -127,7 +107,6 @@ export namespace List {
 
     arr.forEach((x) => {
       if (countMatch(f, x, temp) === 0) {
-        console.log(`Keeping ${x}`);
         temp.push(x);
       }
     });
@@ -136,12 +115,14 @@ export namespace List {
 
   // For each element for which the given function returns true, replace that element with the specified item.
   export function replaceByWith<T>(f: (x: T) => boolean, x: T, arr: T[]) : T[] {
+    console.log(JSON.stringify(arr));
     let temp: T[] = [];
     arr.forEach(e => {
-      if(f(e))
+      if(f(e)) {
         temp.push(x);
-      else
+      } else {
         temp.push(e);
+      }
     });
     return temp;
   }
@@ -149,9 +130,12 @@ export namespace List {
   export function stringDiff(a: string, b: string) : number {
     let sim = 0, i = 0;
     while (i < a.length && i < b.length) {
-      if (a[i] === b[i])
+      if (a[i] === b[i]) {
         sim++;
-      i++;
+        i++;
+      } else {
+        break;
+      }
     }
     return sim;
   }
