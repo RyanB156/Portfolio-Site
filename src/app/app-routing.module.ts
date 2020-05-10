@@ -11,6 +11,7 @@ import { ShooterComponent } from './shooter/shooter.component';
 import { CalculatorComponent } from './calculator/calculator.component';
 import { MorseCodeComponent } from './morse-code/morse-code.component';
 import { HitmanTSComponent } from './hitman-ts/hitman-ts.component';
+import { RegexComponent } from './regex/regex.component';
 
 const routes: Routes = [
   { path: '', redirectTo: '/home', pathMatch: 'full'},
@@ -20,9 +21,10 @@ const routes: Routes = [
   { path: 'games/hitmanTS', component: HitmanTSComponent },
   { path: 'apps/calculator', component: CalculatorComponent },
   { path: 'apps/morsecode', component: MorseCodeComponent },
-  { path: 'projects/tribe', component: TribeComponent },
-  { path: 'projects/logicsim', component: LogicsimComponent },
   { path: 'projects/hitman', component: HitmanComponent },
+  { path: 'projects/logicsim', component: LogicsimComponent },
+  { path: 'projects/tribe', component: TribeComponent },
+  { path: 'projects/regex', component: RegexComponent },
   { path: 'hazel', component: HazelComponent },
 
 ];

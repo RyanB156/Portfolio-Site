@@ -79,6 +79,7 @@ let mtoe = {
   '/': '.'
 };
 
+
 module.exports = {
   toMorse: function(english) {
     english = english.toLowerCase();
@@ -96,6 +97,7 @@ module.exports = {
   
     return str;
   },
+
   
   toEnglish: function(morse) {
     var str = "";

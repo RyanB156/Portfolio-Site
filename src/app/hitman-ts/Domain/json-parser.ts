@@ -9,6 +9,7 @@ import { Init, Item } from './item';
 
 
 export namespace JsonParser {
+  
   function parseItem(o: Object) : Item {
     let info = new Info(o["info"]["name"], o["info"]["description"]);
     switch (o["kind"]) {

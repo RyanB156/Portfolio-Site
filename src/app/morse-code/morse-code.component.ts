@@ -1,8 +1,5 @@
 import { Component, OnInit } from '@angular/core';
-
-// Import from assets/js/morse.js
-declare function toMorse(s: string) : string;
-declare function toEnglish(s: string) : string;
+import { toMorse, toEnglish } from '../../assets/js/morse'
 
 @Component({
   selector: 'app-morse-code',

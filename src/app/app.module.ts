@@ -23,6 +23,7 @@ import { CmdComponent } from './cmd/cmd.component';
 import { HitmanNewGameComponent } from './hitman-new-game/hitman-new-game.component';
 
 import "reflect-metadata";
+import { RegexComponent } from './regex/regex.component';
 
 @NgModule({
   declarations: [
@@ -44,6 +45,7 @@ import "reflect-metadata";
     HitmanTSComponent,
     CmdComponent,
     HitmanNewGameComponent,
+    RegexComponent,
   ],
   imports: [
     BrowserModule,
