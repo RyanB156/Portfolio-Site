@@ -20,9 +20,13 @@ export class AccordionComponent  implements AfterContentInit {
   }
  
   clickPanel(panel: PanelComponent) {
-    // close all panels
-    //this.panels.toArray().forEach(p => p.opened = false);
-    // open the selected panel
-    panel.opened = !panel.opened;
+    if (!panel.opened) {
+      // close all panels
+      this.panels.toArray().forEach(p => p.opened = false);
+      // open the selected panel
+      panel.opened = !panel.opened;
+    } else {
+      panel.opened = false;
+    }
   }
 }

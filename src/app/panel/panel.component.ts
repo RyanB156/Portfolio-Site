@@ -7,10 +7,10 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
   ],
   template: `
   <div class="panel panel-info">
-    <div class="panel-heading btn-link" (click)="toggle.emit()">
+    <div class="panel-heading btn-link text-center" (click)="toggle.emit()">
       {{title}}
     </div>
-    <div class="panel-body" *ngIf="opened">
+    <div class="panel-body border-top border-dark mt-2 px-2" *ngIf="opened">
       <ng-content></ng-content>
     </div>
   <div>
